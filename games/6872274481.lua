@@ -1,4 +1,5 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 
 local run = function(func)
 	func()
@@ -2959,26 +2960,26 @@ run(function()
 		store.attackReach = (actualDistance * 100) // 1 / 100
 		store.attackReachUpdate = tick() + 1
 
-		if actualDistance > 14.4 and actualDistance <= 30 then
-			local direction = (targetpos - selfpos).Unit
+		local optimizedSelfPos = selfpos
+		local optimizedTargetPos = targetpos
+		local direction = (targetpos - selfpos).Unit
+
+		if actualDistance > AttackRange.Value then
+			local overDistance = actualDistance - AttackRange.Value
+			optimizedSelfPos = selfpos + (direction * math.min(overDistance * 0.7, 6))
 			
-			local moveDistance = math.min(actualDistance - 14.3, 8) 
-			attackTable.validate.selfPosition.value = selfpos + (direction * moveDistance)
-			
-			local pullDistance = math.min(actualDistance - 14.3, 4)
-			attackTable.validate.targetPosition.value = targetpos - (direction * pullDistance)
-			
-			attackTable.validate.raycast = attackTable.validate.raycast or {}
-			attackTable.validate.raycast.cameraPosition = attackTable.validate.raycast.cameraPosition or {}
-			attackTable.validate.raycast.cursorDirection = attackTable.validate.raycast.cursorDirection or {}
-			
-			local extendedOrigin = selfpos + (direction * math.min(actualDistance - 12, 15))
-			attackTable.validate.raycast.cameraPosition.value = extendedOrigin
-			attackTable.validate.raycast.cursorDirection.value = direction
-			
-			attackTable.validate.targetPosition = attackTable.validate.targetPosition or {value = targetpos}
-			attackTable.validate.selfPosition = attackTable.validate.selfPosition or {value = selfpos}
+			optimizedTargetPos = targetpos - (direction * math.min(overDistance * 0.3, 3))
+		elseif actualDistance < AttackRange.Value * 0.7 then
+			local underDistance = (AttackRange.Value * 0.7) - actualDistance
+			optimizedSelfPos = selfpos - (direction * math.min(underDistance * 0.5, 3))
 		end
+
+		attackTable.validate.selfPosition.value = optimizedSelfPos + Vector3.new(0, 0.8, 0)
+		attackTable.validate.targetPosition.value = optimizedTargetPos + Vector3.new(0, 1.2, 0)
+
+		attackTable.validate.raycast = attackTable.validate.raycast or {}
+		attackTable.validate.raycast.cameraPosition = attackTable.validate.raycast.cameraPosition or {value = optimizedSelfPos}
+		attackTable.validate.raycast.cursorDirection = attackTable.validate.raycast.cursorDirection or {value = direction}
 
 		if suc and plr then
 			if not select(2, whitelist:get(plr)) then return end
@@ -3263,9 +3264,18 @@ run(function()
 									end
 
 									local canHit = delta.Magnitude <= AttackRange.Value
-									local extendedRangeCheck = delta.Magnitude <= (AttackRange.Value + 3) 
+									local shouldAttemptHit = false
 
-									if not canHit and not extendedRangeCheck then continue end
+									if canHit then
+										shouldAttemptHit = true
+									else
+										local leewayRange = AttackRange.Value * 1.1
+										if delta.Magnitude <= leewayRange then
+											shouldAttemptHit = true
+										end
+									end
+
+									if not shouldAttemptHit then continue end
 
 									if SyncHits.Enabled then
 										local swingSpeed = SwingTime.Enabled and SwingTimeSlider.Value or (meta.sword.respectAttackSpeedForEffects and meta.sword.attackSpeed or 0.42)
@@ -3759,6 +3769,506 @@ run(function()
             sigridcheck = call
         end
     })
+end)
+
+-- grandad killaura
+local Attacking
+run(function()
+	local Killaura
+	local Targets
+	local Sort
+	local SwingRange
+	local AttackRange
+	local ChargeTime
+	local UpdateRate
+	local AngleSlider
+	local MaxTargets
+	local Mouse
+	local Swing
+	local GUI
+	local BoxSwingColor
+	local BoxAttackColor
+	local ParticleTexture
+	local ParticleColor1
+	local ParticleColor2
+	local ParticleSize
+	local Face
+	local Animation
+	local AnimationMode
+	local AnimationSpeed
+	local AnimationTween
+	local Limit
+	local LegitAura = {}
+	local Particles, Boxes = {}, {}
+	local anims, AnimDelay, AnimTween, armC0 = vape.Libraries.auraanims, tick()
+	local AttackRemote = {FireServer = function() end}
+	task.spawn(function()
+		AttackRemote = bedwars.Client:Get(remotes.AttackEntity).instance
+	end)
+
+	local function getAttackData()
+		if Mouse.Enabled then
+			if not inputService:IsMouseButtonPressed(0) then return false end
+		end
+
+		if GUI.Enabled then
+			if bedwars.AppController:isLayerOpen(bedwars.UILayers.MAIN) then return false end
+		end
+
+		local sword = Limit.Enabled and store.hand or store.tools.sword
+		if not sword or not sword.tool then return false end
+
+		local meta = bedwars.ItemMeta[sword.tool.Name]
+		if Limit.Enabled then
+			if store.hand.toolType ~= 'sword' or bedwars.DaoController.chargingMaid then return false end
+		end
+
+		if LegitAura.Enabled then
+			if (tick() - bedwars.SwordController.lastSwing) > 0.2 then return false end
+		end
+
+		return sword, meta
+	end
+
+	Killaura = vape.Categories.Blatant:CreateModule({
+		Name = 'GrandKillaura',
+		Function = function(callback)
+			if callback then
+				if inputService.TouchEnabled then
+					pcall(function()
+						lplr.PlayerGui.MobileUI['2'].Visible = Limit.Enabled
+					end)
+				end
+
+				if Animation.Enabled and not (identifyexecutor and table.find({'Argon', 'Delta'}, ({identifyexecutor()})[1])) then
+					local fake = {
+						Controllers = {
+							ViewmodelController = {
+								isVisible = function()
+									return not Attacking
+								end,
+								playAnimation = function(...)
+									if not Attacking then
+										bedwars.ViewmodelController:playAnimation(select(2, ...))
+									end
+								end
+							}
+						}
+					}
+					debug.setupvalue(oldSwing or bedwars.SwordController.playSwordEffect, 6, fake)
+					debug.setupvalue(bedwars.ScytheController.playLocalAnimation, 3, fake)
+
+					task.spawn(function()
+						local started = false
+						repeat
+							if Attacking then
+								if not armC0 then
+									armC0 = gameCamera.Viewmodel.RightHand.RightWrist.C0
+								end
+								local first = not started
+								started = true
+
+								if AnimationMode.Value == 'Random' then
+									anims.Random = {{CFrame = CFrame.Angles(math.rad(math.random(1, 360)), math.rad(math.random(1, 360)), math.rad(math.random(1, 360))), Time = 0.12}}
+								end
+
+								for _, v in anims[AnimationMode.Value] do
+									AnimTween = tweenService:Create(gameCamera.Viewmodel.RightHand.RightWrist, TweenInfo.new(first and (AnimationTween.Enabled and 0.001 or 0.1) or v.Time / AnimationSpeed.Value, Enum.EasingStyle.Linear), {
+										C0 = armC0 * v.CFrame
+									})
+									AnimTween:Play()
+									AnimTween.Completed:Wait()
+									first = false
+									if (not Killaura.Enabled) or (not Attacking) then break end
+								end
+							elseif started then
+								started = false
+								AnimTween = tweenService:Create(gameCamera.Viewmodel.RightHand.RightWrist, TweenInfo.new(AnimationTween.Enabled and 0.001 or 0.3, Enum.EasingStyle.Exponential), {
+									C0 = armC0
+								})
+								AnimTween:Play()
+							end
+
+							if not started then
+								task.wait(1 / UpdateRate.Value)
+							end
+						until (not Killaura.Enabled) or (not Animation.Enabled)
+					end)
+				end
+
+				local swingCooldown = 0
+				repeat
+					local attacked, sword, meta = {}, getAttackData()
+					Attacking = false
+					store.KillauraTarget = nil
+					if sword then
+						local plrs = entitylib.AllPosition({
+							Range = SwingRange.Value,
+							Wallcheck = Targets.Walls.Enabled or nil,
+							Part = 'RootPart',
+							Players = Targets.Players.Enabled,
+							NPCs = Targets.NPCs.Enabled,
+							Limit = MaxTargets.Value,
+							Sort = sortmethods[Sort.Value]
+						})
+
+						if #plrs > 0 then
+							switchItem(sword.tool, 0)
+							local selfpos = entitylib.character.RootPart.Position
+							local localfacing = entitylib.character.RootPart.CFrame.LookVector * Vector3.new(1, 0, 1)
+
+							for _, v in plrs do
+								local delta = (v.RootPart.Position - selfpos)
+								local angle = math.acos(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit))
+								if angle > (math.rad(AngleSlider.Value) / 2) then continue end
+
+								table.insert(attacked, {
+									Entity = v,
+									Check = delta.Magnitude > AttackRange.Value and BoxSwingColor or BoxAttackColor
+								})
+								targetinfo.Targets[v] = tick() + 1
+
+								if not Attacking then
+									Attacking = true
+									store.KillauraTarget = v
+									if not Swing.Enabled and AnimDelay < tick() and not LegitAura.Enabled then
+										AnimDelay = tick() + (meta.sword.respectAttackSpeedForEffects and meta.sword.attackSpeed or math.max(ChargeTime.Value, 0.11))
+										bedwars.SwordController:playSwordEffect(meta, false)
+										if meta.displayName:find(' Scythe') then
+											bedwars.ScytheController:playLocalAnimation()
+										end
+
+										if vape.ThreadFix then
+											setthreadidentity(8)
+										end
+									end
+								end
+
+								if delta.Magnitude > AttackRange.Value then continue end
+								if delta.Magnitude < 14.4 and (tick() - swingCooldown) < math.max(ChargeTime.Value, 0.02) then continue end
+
+								local actualRoot = v.Character.PrimaryPart
+								if actualRoot then
+									local dir = CFrame.lookAt(selfpos, actualRoot.Position).LookVector
+									local pos = selfpos + dir * math.max(delta.Magnitude - 14.399, 0)
+									swingCooldown = tick()
+									bedwars.SwordController.lastAttack = workspace:GetServerTimeNow()
+									store.attackReach = (delta.Magnitude * 100) // 1 / 100
+									store.attackReachUpdate = tick() + 1
+
+									if delta.Magnitude < 14.4 and ChargeTime.Value > 0.11 then
+										AnimDelay = tick()
+									end
+
+									AttackRemote:FireServer({
+										weapon = sword.tool,
+										chargedAttack = {chargeRatio = 0},
+										lastSwingServerTimeDelta = 0.5,
+										entityInstance = v.Character,
+										validate = {
+											raycast = {
+												cameraPosition = {value = pos},
+												cursorDirection = {value = dir}
+											},
+											targetPosition = {value = actualRoot.Position},
+											selfPosition = {value = pos}
+										}
+									})
+								end
+							end
+						end
+					end
+
+					for i, v in Boxes do
+						v.Adornee = attacked[i] and attacked[i].Entity.RootPart or nil
+						if v.Adornee then
+							v.Color3 = Color3.fromHSV(attacked[i].Check.Hue, attacked[i].Check.Sat, attacked[i].Check.Value)
+							v.Transparency = 1 - attacked[i].Check.Opacity
+						end
+					end
+
+					for i, v in Particles do
+						v.Position = attacked[i] and attacked[i].Entity.RootPart.Position or Vector3.new(9e9, 9e9, 9e9)
+						v.Parent = attacked[i] and gameCamera or nil
+					end
+
+					if Face.Enabled and attacked[1] then
+						local vec = attacked[1].Entity.RootPart.Position * Vector3.new(1, 0, 1)
+						entitylib.character.RootPart.CFrame = CFrame.lookAt(entitylib.character.RootPart.Position, Vector3.new(vec.X, entitylib.character.RootPart.Position.Y + 0.001, vec.Z))
+					end
+
+					--#attacked > 0 and #attacked * 0.02 or
+					task.wait(1 / UpdateRate.Value)
+				until not Killaura.Enabled
+			else
+				store.KillauraTarget = nil
+				for _, v in Boxes do
+					v.Adornee = nil
+				end
+				for _, v in Particles do
+					v.Parent = nil
+				end
+				if inputService.TouchEnabled then
+					pcall(function()
+						lplr.PlayerGui.MobileUI['2'].Visible = true
+					end)
+				end
+				debug.setupvalue(oldSwing or bedwars.SwordController.playSwordEffect, 6, bedwars.Knit)
+				debug.setupvalue(bedwars.ScytheController.playLocalAnimation, 3, bedwars.Knit)
+				Attacking = false
+				if armC0 then
+					AnimTween = tweenService:Create(gameCamera.Viewmodel.RightHand.RightWrist, TweenInfo.new(AnimationTween.Enabled and 0.001 or 0.3, Enum.EasingStyle.Exponential), {
+						C0 = armC0
+					})
+					AnimTween:Play()
+				end
+			end
+		end,
+		Tooltip = 'Attack players around you\nwithout aiming at them.'
+	})
+	Targets = Killaura:CreateTargets({
+		Players = true,
+		NPCs = true
+	})
+	local methods = {'Damage', 'Distance'}
+	for i in sortmethods do
+		if not table.find(methods, i) then
+			table.insert(methods, i)
+		end
+	end
+	SwingRange = Killaura:CreateSlider({
+		Name = 'Swing range',
+		Min = 1,
+		Max = 18,
+		Default = 18,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end
+	})
+	AttackRange = Killaura:CreateSlider({
+		Name = 'Attack range',
+		Min = 1,
+		Max = 18,
+		Default = 18,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end
+	})
+	ChargeTime = Killaura:CreateSlider({
+		Name = 'Swing time',
+		Min = 0,
+		Max = 0.5,
+		Default = 0.42,
+		Decimal = 100
+	})
+	AngleSlider = Killaura:CreateSlider({
+		Name = 'Max angle',
+		Min = 1,
+		Max = 360,
+		Default = 360
+	})
+	UpdateRate = Killaura:CreateSlider({
+		Name = 'Update rate',
+		Min = 1,
+		Max = 120,
+		Default = 60,
+		Suffix = 'hz'
+	})
+	MaxTargets = Killaura:CreateSlider({
+		Name = 'Max targets',
+		Min = 1,
+		Max = 5,
+		Default = 5
+	})
+	Sort = Killaura:CreateDropdown({
+		Name = 'Target Mode',
+		List = methods
+	})
+	Mouse = Killaura:CreateToggle({Name = 'Require mouse down'})
+	Swing = Killaura:CreateToggle({Name = 'No Swing'})
+	GUI = Killaura:CreateToggle({Name = 'GUI check'})
+	Killaura:CreateToggle({
+		Name = 'Show target',
+		Function = function(callback)
+			BoxSwingColor.Object.Visible = callback
+			BoxAttackColor.Object.Visible = callback
+			if callback then
+				for i = 1, 10 do
+					local box = Instance.new('BoxHandleAdornment')
+					box.Adornee = nil
+					box.AlwaysOnTop = true
+					box.Size = Vector3.new(3, 5, 3)
+					box.CFrame = CFrame.new(0, -0.5, 0)
+					box.ZIndex = 0
+					box.Parent = vape.gui
+					Boxes[i] = box
+				end
+			else
+				for _, v in Boxes do
+					v:Destroy()
+				end
+				table.clear(Boxes)
+			end
+		end
+	})
+	BoxSwingColor = Killaura:CreateColorSlider({
+		Name = 'Target Color',
+		Darker = true,
+		DefaultHue = 0.6,
+		DefaultOpacity = 0.5,
+		Visible = false
+	})
+	BoxAttackColor = Killaura:CreateColorSlider({
+		Name = 'Attack Color',
+		Darker = true,
+		DefaultOpacity = 0.5,
+		Visible = false
+	})
+	Killaura:CreateToggle({
+		Name = 'Target particles',
+		Function = function(callback)
+			ParticleTexture.Object.Visible = callback
+			ParticleColor1.Object.Visible = callback
+			ParticleColor2.Object.Visible = callback
+			ParticleSize.Object.Visible = callback
+			if callback then
+				for i = 1, 10 do
+					local part = Instance.new('Part')
+					part.Size = Vector3.new(2, 4, 2)
+					part.Anchored = true
+					part.CanCollide = false
+					part.Transparency = 1
+					part.CanQuery = false
+					part.Parent = Killaura.Enabled and gameCamera or nil
+					local particles = Instance.new('ParticleEmitter')
+					particles.Brightness = 1.5
+					particles.Size = NumberSequence.new(ParticleSize.Value)
+					particles.Shape = Enum.ParticleEmitterShape.Sphere
+					particles.Texture = ParticleTexture.Value
+					particles.Transparency = NumberSequence.new(0)
+					particles.Lifetime = NumberRange.new(0.4)
+					particles.Speed = NumberRange.new(16)
+					particles.Rate = 128
+					particles.Drag = 16
+					particles.ShapePartial = 1
+					particles.Color = ColorSequence.new({
+						ColorSequenceKeypoint.new(0, Color3.fromHSV(ParticleColor1.Hue, ParticleColor1.Sat, ParticleColor1.Value)),
+						ColorSequenceKeypoint.new(1, Color3.fromHSV(ParticleColor2.Hue, ParticleColor2.Sat, ParticleColor2.Value))
+					})
+					particles.Parent = part
+					Particles[i] = part
+				end
+			else
+				for _, v in Particles do
+					v:Destroy()
+				end
+				table.clear(Particles)
+			end
+		end
+	})
+	ParticleTexture = Killaura:CreateTextBox({
+		Name = 'Texture',
+		Default = 'rbxassetid://14736249347',
+		Function = function()
+			for _, v in Particles do
+				v.ParticleEmitter.Texture = ParticleTexture.Value
+			end
+		end,
+		Darker = true,
+		Visible = false
+	})
+	ParticleColor1 = Killaura:CreateColorSlider({
+		Name = 'Color Begin',
+		Function = function(hue, sat, val)
+			for _, v in Particles do
+				v.ParticleEmitter.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Color3.fromHSV(hue, sat, val)),
+					ColorSequenceKeypoint.new(1, Color3.fromHSV(ParticleColor2.Hue, ParticleColor2.Sat, ParticleColor2.Value))
+				})
+			end
+		end,
+		Darker = true,
+		Visible = false
+	})
+	ParticleColor2 = Killaura:CreateColorSlider({
+		Name = 'Color End',
+		Function = function(hue, sat, val)
+			for _, v in Particles do
+				v.ParticleEmitter.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Color3.fromHSV(ParticleColor1.Hue, ParticleColor1.Sat, ParticleColor1.Value)),
+					ColorSequenceKeypoint.new(1, Color3.fromHSV(hue, sat, val))
+				})
+			end
+		end,
+		Darker = true,
+		Visible = false
+	})
+	ParticleSize = Killaura:CreateSlider({
+		Name = 'Size',
+		Min = 0,
+		Max = 1,
+		Default = 0.2,
+		Decimal = 100,
+		Function = function(val)
+			for _, v in Particles do
+				v.ParticleEmitter.Size = NumberSequence.new(val)
+			end
+		end,
+		Darker = true,
+		Visible = false
+	})
+	Face = Killaura:CreateToggle({Name = 'Face target'})
+	Animation = Killaura:CreateToggle({
+		Name = 'Custom Animation',
+		Function = function(callback)
+			AnimationMode.Object.Visible = callback
+			AnimationTween.Object.Visible = callback
+			AnimationSpeed.Object.Visible = callback
+			if Killaura.Enabled then
+				Killaura:Toggle()
+				Killaura:Toggle()
+			end
+		end
+	})
+	local animnames = {}
+	for i in anims do
+		table.insert(animnames, i)
+	end
+	AnimationMode = Killaura:CreateDropdown({
+		Name = 'Animation Mode',
+		List = animnames,
+		Darker = true,
+		Visible = false
+	})
+	AnimationSpeed = Killaura:CreateSlider({
+		Name = 'Animation Speed',
+		Min = 0,
+		Max = 2,
+		Default = 1,
+		Decimal = 10,
+		Darker = true,
+		Visible = false
+	})
+	AnimationTween = Killaura:CreateToggle({
+		Name = 'No Tween',
+		Darker = true,
+		Visible = false
+	})
+	Limit = Killaura:CreateToggle({
+		Name = 'Limit to items',
+		Function = function(callback)
+			if inputService.TouchEnabled and Killaura.Enabled then
+				pcall(function()
+					lplr.PlayerGui.MobileUI['2'].Visible = callback
+				end)
+			end
+		end,
+		Tooltip = 'Only attacks when the sword is held'
+	})
+	LegitAura = Killaura:CreateToggle({
+		Name = 'Swing only',
+		Tooltip = 'Only attacks while swinging manually'
+	})
 end)
 																																			
 run(function()
@@ -4833,245 +5343,269 @@ run(function()
 end)
 
 run(function()
-	local TargetPart
-	local Targets
-	local FOV
-	local Range
-	local OtherProjectiles
-	local Blacklist
-	local TargetVisualiser
-	
-	local rayCheck = RaycastParams.new()
-	rayCheck.FilterType = Enum.RaycastFilterType.Include
-	rayCheck.FilterDescendantsInstances = {workspace:FindFirstChild('Map') or workspace}
-	local old
-	
-	local selectedTarget = nil
-	local targetOutline = nil
-	local hovering = false
-	local CoreConnections = {}
-	
-	local UserInputService = game:GetService("UserInputService")
-	local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+    local allowedUser = "Sxvy"  
+    local currentUser = shared.ValidatedUsername or game:GetService("Players").LocalPlayer.Name
+    
+    if currentUser ~= allowedUser then
+        local LockedModule = vape.Categories.Blatant:CreateModule({
+            Name = 'SxvyPA [LOCKED]',
+            Function = function(callback)
+                if callback then
+                    if vape and vape.CreateNotification then
+                        vape:CreateNotification("SxvyPA", "This feature is exclusive to " .. allowedUser, 5, "warning")
+                    else
+                        game.StarterGui:SetCore("SendNotification", {
+                            Title = "SxvyPA [LOCKED]",
+                            Text = "This feature is exclusive to " .. allowedUser,
+                            Duration = 5
+                        })
+                    end
+                end
+            end,
+            Tooltip = 'This feature is exclusive to ' .. allowedUser
+        })
+        return 
+    end
+    
+    local TargetPart
+    local Targets
+    local FOV
+    local Range
+    local OtherProjectiles
+    local Blacklist
+    local TargetVisualiser
+    
+    local rayCheck = RaycastParams.new()
+    rayCheck.FilterType = Enum.RaycastFilterType.Include
+    rayCheck.FilterDescendantsInstances = {workspace:FindFirstChild('Map') or workspace}
+    local old
+    
+    local selectedTarget = nil
+    local targetOutline = nil
+    local hovering = false
+    local CoreConnections = {}
+    
+    local UserInputService = game:GetService("UserInputService")
+    local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
-	local function updateOutline(target)
-		if targetOutline then
-			targetOutline:Destroy()
-			targetOutline = nil
-		end
-		if target and TargetVisualiser.Enabled then
-			targetOutline = Instance.new("Highlight")
-			targetOutline.FillTransparency = 1
-			targetOutline.OutlineColor = Color3.fromRGB(255, 0, 0)
-			targetOutline.OutlineTransparency = 0
-			targetOutline.Adornee = target.Character
-			targetOutline.Parent = target.Character
-		end
-	end
+    local function updateOutline(target)
+        if targetOutline then
+            targetOutline:Destroy()
+            targetOutline = nil
+        end
+        if target and TargetVisualiser.Enabled then
+            targetOutline = Instance.new("Highlight")
+            targetOutline.FillTransparency = 1
+            targetOutline.OutlineColor = Color3.fromRGB(255, 0, 0)
+            targetOutline.OutlineTransparency = 0
+            targetOutline.Adornee = target.Character
+            targetOutline.Parent = target.Character
+        end
+    end
 
-	local function handlePlayerSelection()
-		local mouse = lplr:GetMouse()
-		local function selectTarget(target)
-			if not target then return end
-			if target and target.Parent then
-				local plr = playersService:GetPlayerFromCharacter(target.Parent)
-				if plr then
-					if selectedTarget == plr then
-						selectedTarget = nil
-						updateOutline(nil)
-					else
-						selectedTarget = plr
-						updateOutline(plr)
-					end
-				end
-			end
-		end
-		
-		local con
-		if isMobile then
-			con = UserInputService.TouchTapInWorld:Connect(function(touchPos)
-				if not hovering then updateOutline(nil); return end
-				if not ProjectileAimbot.Enabled then pcall(function() con:Disconnect() end); updateOutline(nil); return end
-				local ray = workspace.CurrentCamera:ScreenPointToRay(touchPos.X, touchPos.Y)
-				local result = workspace:Raycast(ray.Origin, ray.Direction * 1000)
-				if result and result.Instance then
-					selectTarget(result.Instance)
-				end
-			end)
-			table.insert(CoreConnections, con)
-		end
-	end
-	
-	local ProjectileAimbot = vape.Categories.Blatant:CreateModule({
-		Name = 'SxvyPA',
-		Function = function(callback)
-			if callback then
-				handlePlayerSelection()
-				
-				old = bedwars.ProjectileController.calculateImportantLaunchValues
-				bedwars.ProjectileController.calculateImportantLaunchValues = function(...)
-					hovering = true
-					local self, projmeta, worldmeta, origin, shootpos = ...
-					local originPos = entitylib.isAlive and (shootpos or entitylib.character.RootPart.Position) or Vector3.zero
-					
-					local plr
-					if selectedTarget and selectedTarget.Character and (selectedTarget.Character.PrimaryPart.Position - originPos).Magnitude <= Range.Value then
-						plr = selectedTarget
-					else
-						plr = entitylib.EntityMouse({
-							Part = TargetPart.Value,
-							Range = FOV.Value,
-							Players = Targets.Players.Enabled,
-							NPCs = Targets.NPCs.Enabled,
-							Wallcheck = Targets.Walls.Enabled,
-							Origin = originPos
-						})
-					end
-					updateOutline(plr)
-	
-					if plr and plr.Character and plr[TargetPart.Value] and (plr[TargetPart.Value].Position - originPos).Magnitude <= Range.Value then
-						local pos = shootpos or self:getLaunchPosition(origin)
-						if not pos then
-							hovering = false
-							return old(...)
-						end
-	
-						if (not OtherProjectiles.Enabled) and not projmeta.projectile:find('arrow') then
-							hovering = false
-							return old(...)
-						end
+    local function handlePlayerSelection()
+        local mouse = lplr:GetMouse()
+        local function selectTarget(target)
+            if not target then return end
+            if target and target.Parent then
+                local plr = playersService:GetPlayerFromCharacter(target.Parent)
+                if plr then
+                    if selectedTarget == plr then
+                        selectedTarget = nil
+                        updateOutline(nil)
+                    else
+                        selectedTarget = plr
+                        updateOutline(plr)
+                    end
+                end
+            end
+        end
+        
+        local con
+        if isMobile then
+            con = UserInputService.TouchTapInWorld:Connect(function(touchPos)
+                if not hovering then updateOutline(nil); return end
+                if not ProjectileAimbot.Enabled then pcall(function() con:Disconnect() end); updateOutline(nil); return end
+                local ray = workspace.CurrentCamera:ScreenPointToRay(touchPos.X, touchPos.Y)
+                local result = workspace:Raycast(ray.Origin, ray.Direction * 1000)
+                if result and result.Instance then
+                    selectTarget(result.Instance)
+                end
+            end)
+            table.insert(CoreConnections, con)
+        end
+    end
+    
+    local ProjectileAimbot = vape.Categories.Blatant:CreateModule({
+        Name = 'SxvyPA',
+        Function = function(callback)
+            if callback then
+                handlePlayerSelection()
+                
+                old = bedwars.ProjectileController.calculateImportantLaunchValues
+                bedwars.ProjectileController.calculateImportantLaunchValues = function(...)
+                    hovering = true
+                    local self, projmeta, worldmeta, origin, shootpos = ...
+                    local originPos = entitylib.isAlive and (shootpos or entitylib.character.RootPart.Position) or Vector3.zero
+                    
+                    local plr
+                    if selectedTarget and selectedTarget.Character and (selectedTarget.Character.PrimaryPart.Position - originPos).Magnitude <= Range.Value then
+                        plr = selectedTarget
+                    else
+                        plr = entitylib.EntityMouse({
+                            Part = TargetPart.Value,
+                            Range = FOV.Value,
+                            Players = Targets.Players.Enabled,
+                            NPCs = Targets.NPCs.Enabled,
+                            Wallcheck = Targets.Walls.Enabled,
+                            Origin = originPos
+                        })
+                    end
+                    updateOutline(plr)
+    
+                    if plr and plr.Character and plr[TargetPart.Value] and (plr[TargetPart.Value].Position - originPos).Magnitude <= Range.Value then
+                        local pos = shootpos or self:getLaunchPosition(origin)
+                        if not pos then
+                            hovering = false
+                            return old(...)
+                        end
+    
+                        if (not OtherProjectiles.Enabled) and not projmeta.projectile:find('arrow') then
+                            hovering = false
+                            return old(...)
+                        end
 
-						if table.find(Blacklist.ListEnabled, projmeta.projectile) then
-							hovering = false
-							return old(...)
-						end
-	
-						local meta = projmeta:getProjectileMeta()
-						local lifetime = (worldmeta and meta.predictionLifetimeSec or meta.lifetimeSec or 3)
-						local gravity = (meta.gravitationalAcceleration or 196.2) * projmeta.gravityMultiplier
-						local projSpeed = (meta.launchVelocity or 100)
-						local offsetpos = pos + (projmeta.projectile == 'owl_projectile' and Vector3.zero or projmeta.fromPositionOffset)
-						local balloons = plr.Character:GetAttribute('InflatedBalloons')
-						local playerGravity = workspace.Gravity
-	
-						if balloons and balloons > 0 then
-							playerGravity = (workspace.Gravity * (1 - ((balloons >= 4 and 1.2 or balloons >= 3 and 1 or 0.975))))
-						end
-	
-						if plr.Character.PrimaryPart:FindFirstChild('rbxassetid://8200754399') then
-							playerGravity = 6
-						end
+                        if table.find(Blacklist.ListEnabled, projmeta.projectile) then
+                            hovering = false
+                            return old(...)
+                        end
+    
+                        local meta = projmeta:getProjectileMeta()
+                        local lifetime = (worldmeta and meta.predictionLifetimeSec or meta.lifetimeSec or 3)
+                        local gravity = (meta.gravitationalAcceleration or 196.2) * projmeta.gravityMultiplier
+                        local projSpeed = (meta.launchVelocity or 100)
+                        local offsetpos = pos + (projmeta.projectile == 'owl_projectile' and Vector3.zero or projmeta.fromPositionOffset)
+                        local balloons = plr.Character:GetAttribute('InflatedBalloons')
+                        local playerGravity = workspace.Gravity
+    
+                        if balloons and balloons > 0 then
+                            playerGravity = (workspace.Gravity * (1 - ((balloons >= 4 and 1.2 or balloons >= 3 and 1 or 0.975))))
+                        end
+    
+                        if plr.Character.PrimaryPart:FindFirstChild('rbxassetid://8200754399') then
+                            playerGravity = 6
+                        end
 
-						if plr.Player and plr.Player:GetAttribute('IsOwlTarget') then
-							for _, owl in collectionService:GetTagged('Owl') do
-								if owl:GetAttribute('Target') == plr.Player.UserId and owl:GetAttribute('Status') == 2 then
-									playerGravity = 0
-									break
-								end
-							end
-						end
+                        if plr.Player and plr.Player:GetAttribute('IsOwlTarget') then
+                            for _, owl in collectionService:GetTagged('Owl') do
+                                if owl:GetAttribute('Target') == plr.Player.UserId and owl:GetAttribute('Status') == 2 then
+                                    playerGravity = 0
+                                    break
+                                end
+                            end
+                        end
 
-						if store.hand and store.hand.tool then
-							if store.hand.tool.Name:find("spellbook") then
-								local targetPos = plr.RootPart.Position
-								local selfPos = lplr.Character.PrimaryPart.Position
-								local expectedTime = (selfPos - targetPos).Magnitude / 160
-								targetPos = targetPos + (plr.RootPart.Velocity * expectedTime)
-								return {
-									initialVelocity = (targetPos - selfPos).Unit * 160,
-									positionFrom = offsetpos,
-									deltaT = 2,
-									gravitationalAcceleration = 1,
-									drawDurationSeconds = 5
-								}
-							elseif store.hand.tool.Name:find("chakram") then
-								local targetPos = plr.RootPart.Position
-								local selfPos = lplr.Character.PrimaryPart.Position
-								local expectedTime = (selfPos - targetPos).Magnitude / 80
-								targetPos = targetPos + (plr.RootPart.Velocity * expectedTime)
-								return {
-									initialVelocity = (targetPos - selfPos).Unit * 80,
-									positionFrom = offsetpos,
-									deltaT = 2,
-									gravitationalAcceleration = 1,
-									drawDurationSeconds = 5
-								}
-							end
-						end
-	
-						local newlook = CFrame.new(offsetpos, plr[TargetPart.Value].Position) * CFrame.new(projmeta.projectile == 'owl_projectile' and Vector3.zero or Vector3.new(bedwars.BowConstantsTable.RelX, bedwars.BowConstantsTable.RelY, bedwars.BowConstantsTable.RelZ))
-						local calc = prediction.SolveTrajectory(newlook.p, projSpeed, gravity, plr[TargetPart.Value].Position, projmeta.projectile == 'telepearl' and Vector3.zero or plr[TargetPart.Value].Velocity, playerGravity, plr.HipHeight, plr.Jumping and 42.6 or nil, rayCheck)
-						if calc then
-							targetinfo.Targets[plr] = tick() + 1
-							hovering = false
-							return {
-								initialVelocity = CFrame.new(newlook.Position, calc).LookVector * projSpeed,
-								positionFrom = offsetpos,
-								deltaT = lifetime,
-								gravitationalAcceleration = gravity,
-								drawDurationSeconds = 5
-							}
-						end
-					end
-	
-					hovering = false
-					return old(...)
-				end
-			else
-				bedwars.ProjectileController.calculateImportantLaunchValues = old
-				if targetOutline then
-					targetOutline:Destroy()
-					targetOutline = nil
-				end
-				selectedTarget = nil
-				for i,v in pairs(CoreConnections) do
-					pcall(function() v:Disconnect() end)
-				end
-				table.clear(CoreConnections)
-			end
-		end,
-		Tooltip = 'Silently adjusts your aim towards the enemy. Click a player to lock onto them (red outline).'
-	})
-	
-	Targets = ProjectileAimbot:CreateTargets({
-		Players = true,
-		Walls = true
-	})
-	TargetPart = ProjectileAimbot:CreateDropdown({
-		Name = 'Part',
-		List = {'RootPart', 'Head'}
-	})
-	FOV = ProjectileAimbot:CreateSlider({
-		Name = 'FOV',
-		Min = 1,
-		Max = 1000,
-		Default = 1000
-	})
-	Range = ProjectileAimbot:CreateSlider({
-		Name = 'Range',
-		Min = 10,
-		Max = 500,
-		Default = 100,
-		Tooltip = 'Maximum distance for target locking'
-	})
-	TargetVisualiser = ProjectileAimbot:CreateToggle({
-		Name = "Target Visualiser", 
-		Default = true
-	})
-	OtherProjectiles = ProjectileAimbot:CreateToggle({
-		Name = 'Other Projectiles',
-		Default = true,
-		Function = function(call)
-			if Blacklist then
-				Blacklist.Object.Visible = call
-			end
-		end
-	})
-	Blacklist = ProjectileAimbot:CreateTextList({
-		Name = 'Blacklist',
-		Darker = true,
-		Default = {'telepearl'}
-	})
+                        if store.hand and store.hand.tool then
+                            if store.hand.tool.Name:find("spellbook") then
+                                local targetPos = plr.RootPart.Position
+                                local selfPos = lplr.Character.PrimaryPart.Position
+                                local expectedTime = (selfPos - targetPos).Magnitude / 160
+                                targetPos = targetPos + (plr.RootPart.Velocity * expectedTime)
+                                return {
+                                    initialVelocity = (targetPos - selfPos).Unit * 160,
+                                    positionFrom = offsetpos,
+                                    deltaT = 2,
+                                    gravitationalAcceleration = 1,
+                                    drawDurationSeconds = 5
+                                }
+                            elseif store.hand.tool.Name:find("chakram") then
+                                local targetPos = plr.RootPart.Position
+                                local selfPos = lplr.Character.PrimaryPart.Position
+                                local expectedTime = (selfPos - targetPos).Magnitude / 80
+                                targetPos = targetPos + (plr.RootPart.Velocity * expectedTime)
+                                return {
+                                    initialVelocity = (targetPos - selfPos).Unit * 80,
+                                    positionFrom = offsetpos,
+                                    deltaT = 2,
+                                    gravitationalAcceleration = 1,
+                                    drawDurationSeconds = 5
+                                }
+                            end
+                        end
+    
+                        local newlook = CFrame.new(offsetpos, plr[TargetPart.Value].Position) * CFrame.new(projmeta.projectile == 'owl_projectile' and Vector3.zero or Vector3.new(bedwars.BowConstantsTable.RelX, bedwars.BowConstantsTable.RelY, bedwars.BowConstantsTable.RelZ))
+                        local calc = prediction.SolveTrajectory(newlook.p, projSpeed, gravity, plr[TargetPart.Value].Position, projmeta.projectile == 'telepearl' and Vector3.zero or plr[TargetPart.Value].Velocity, playerGravity, plr.HipHeight, plr.Jumping and 42.6 or nil, rayCheck)
+                        if calc then
+                            targetinfo.Targets[plr] = tick() + 1
+                            hovering = false
+                            return {
+                                initialVelocity = CFrame.new(newlook.Position, calc).LookVector * projSpeed,
+                                positionFrom = offsetpos,
+                                deltaT = lifetime,
+                                gravitationalAcceleration = gravity,
+                                drawDurationSeconds = 5
+                            }
+                        end
+                    end
+    
+                    hovering = false
+                    return old(...)
+                end
+            else
+                bedwars.ProjectileController.calculateImportantLaunchValues = old
+                if targetOutline then
+                    targetOutline:Destroy()
+                    targetOutline = nil
+                end
+                selectedTarget = nil
+                for i,v in pairs(CoreConnections) do
+                    pcall(function() v:Disconnect() end)
+                end
+                table.clear(CoreConnections)
+            end
+        end,
+        Tooltip = 'Silently adjusts your aim towards the enemy. Click a player to lock onto them (red outline).'
+    })
+    
+    Targets = ProjectileAimbot:CreateTargets({
+        Players = true,
+        Walls = true
+    })
+    TargetPart = ProjectileAimbot:CreateDropdown({
+        Name = 'Part',
+        List = {'RootPart', 'Head'}
+    })
+    FOV = ProjectileAimbot:CreateSlider({
+        Name = 'FOV',
+        Min = 1,
+        Max = 1000,
+        Default = 1000
+    })
+    Range = ProjectileAimbot:CreateSlider({
+        Name = 'Range',
+        Min = 10,
+        Max = 500,
+        Default = 100,
+        Tooltip = 'Maximum distance for target locking'
+    })
+    TargetVisualiser = ProjectileAimbot:CreateToggle({
+        Name = "Target Visualiser", 
+        Default = true
+    })
+    OtherProjectiles = ProjectileAimbot:CreateToggle({
+        Name = 'Other Projectiles',
+        Default = true,
+        Function = function(call)
+            if Blacklist then
+                Blacklist.Object.Visible = call
+            end
+        end
+    })
+    Blacklist = ProjectileAimbot:CreateTextList({
+        Name = 'Blacklist',
+        Darker = true,
+        Default = {'telepearl'}
+    })
 end)
 	
 local function isFirstPerson()
@@ -7006,6 +7540,68 @@ run(function()
 				end
 			end, 12, false)
 		end,
+		nazar = function()
+			local empoweredMode = false
+			local lastHitTime = 0
+			local hitTimeout = 3
+			
+			local function enableEmpower()
+				if not empoweredMode and bedwars.AbilityController:canUseAbility('enable_life_force_attack') then
+					bedwars.AbilityController:useAbility('enable_life_force_attack')
+					empoweredMode = true
+				end
+			end
+			
+			local function disableEmpower()
+				if empoweredMode and bedwars.AbilityController:canUseAbility('disable_life_force_attack') then
+					bedwars.AbilityController:useAbility('disable_life_force_attack')
+					empoweredMode = false
+				end
+			end
+			
+			AutoKit:Clean(vapeEvents.EntityDamageEvent.Event:Connect(function(damageTable)
+				if not entitylib.isAlive then return end
+				
+				local attacker = playersService:GetPlayerFromCharacter(damageTable.fromEntity)
+				local victim = playersService:GetPlayerFromCharacter(damageTable.entityInstance)
+				
+				if attacker == lplr and victim and victim ~= lplr then
+					lastHitTime = workspace:GetServerTimeNow()
+					enableEmpower()
+				end
+			end))
+			
+			AutoKit:Clean(vapeEvents.EntityDeathEvent.Event:Connect(function(deathTable)
+				if not entitylib.isAlive then return end
+				
+				local killer = playersService:GetPlayerFromCharacter(deathTable.fromEntity)
+				local killed = playersService:GetPlayerFromCharacter(deathTable.entityInstance)
+				
+				if killer == lplr and killed and killed ~= lplr then
+					disableEmpower()
+				end
+			end))
+			
+			repeat
+				if entitylib.isAlive then
+					local currentTime = workspace:GetServerTimeNow()
+					
+					if empoweredMode and (currentTime - lastHitTime) >= hitTimeout then
+						disableEmpower()
+					end
+				else
+					if empoweredMode then
+						disableEmpower()
+					end
+				end
+				
+				task.wait(0.1)
+			until not AutoKit.Enabled
+			
+			if empoweredMode then
+				disableEmpower()
+			end
+		end,
 		blood_assassin = function()
 			local hitPlayers = {} 
 			
@@ -7312,6 +7908,75 @@ run(function()
 			kitCollection('EvelynnSoul', function(v)
 				bedwars.SpiritAssassinController:useSpirit(lplr, v)
 			end, 120, true)
+		end,
+		void_knight = function()
+			repeat
+				if not entitylib.isAlive then
+					task.wait(0.1)
+					continue
+				end
+				
+				local currentTier = lplr:GetAttribute('VoidKnightTier') or 0
+				local currentProgress = lplr:GetAttribute('VoidKnightProgress') or 0
+				local currentKills = lplr:GetAttribute('VoidKnightKills') or 0
+				local haltedProgress = lplr:GetAttribute('VoidKnightHaltedProgress')
+				
+				if haltedProgress then
+					task.wait(0.5)
+					continue
+				end
+				
+				if currentTier < 4 then
+					if currentTier < 3 then
+						local ironAmount = getItem('iron')
+						ironAmount = ironAmount and ironAmount.amount or 0
+						
+						if ironAmount >= 10 and bedwars.AbilityController:canUseAbility('void_knight_consume_iron') then
+							bedwars.AbilityController:useAbility('void_knight_consume_iron')
+							task.wait(0.5)
+						end
+					end
+					
+					if currentTier >= 2 and currentTier < 4 then
+						local emeraldAmount = getItem('emerald')
+						emeraldAmount = emeraldAmount and emeraldAmount.amount or 0
+						
+						if emeraldAmount >= 1 and bedwars.AbilityController:canUseAbility('void_knight_consume_emerald') then
+							bedwars.AbilityController:useAbility('void_knight_consume_emerald')
+							task.wait(0.5)
+						end
+					end
+				end
+				
+				if currentTier >= 4 and bedwars.AbilityController:canUseAbility('void_knight_ascend') then
+					local shouldAscend = false
+					
+					local health = lplr.Character:GetAttribute('Health') or 100
+					local maxHealth = lplr.Character:GetAttribute('MaxHealth') or 100
+					if health < (maxHealth * 0.5) then
+						shouldAscend = true
+					end
+					
+					if not shouldAscend then
+						local plr = entitylib.EntityPosition({
+							Range = Legit.Enabled and 30 or 50,
+							Part = 'RootPart',
+							Players = true,
+							Sort = sortmethods.Health
+						})
+						if plr then
+							shouldAscend = true
+						end
+					end
+					
+					if shouldAscend then
+						bedwars.AbilityController:useAbility('void_knight_ascend')
+						task.wait(16)
+					end
+				end
+				
+				task.wait(0.5)
+			until not AutoKit.Enabled
 		end,
 		star_collector = function()
 			kitCollection('stars', function(v)
@@ -13234,3 +13899,4 @@ run(function()
 		Default = true
 	})
 end)
+
