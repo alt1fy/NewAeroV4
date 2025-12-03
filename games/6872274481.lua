@@ -13763,3 +13763,352 @@ run(function()
 	})
 end)
 
+run(function()
+    local ClientCrasher
+    local Method
+
+    ClientCrasher = vape.Categories.Blatant:CreateModule({
+        Name = 'Client Crasher',
+        Function = function(callback)
+            if callback then
+                for _, v in getconnections(game:GetService("ReplicatedStorage"):WaitForChild("events-@easy-games/game-core:shared/game-core-networking@getEvents.Events"):WaitForChild("abilityUsed").OnClientEvent) do
+                    v:Disconnect()    
+                end
+
+                ClientCrasher:Clean(collectionService:GetInstanceAddedSignal('inventory-entity'):Connect(function(player: Model)
+                    local item = player:WaitForChild('HandInvItem') :: IntValue?
+                    for i,v in getconnections(item.Changed) do
+                        v:Disable()
+                    end                
+                end))
+
+                repeat
+                    if entitylib.isAlive then
+                        if Method.Value == 'Ability' then
+                            for _ = 1, 25 do
+                                replicatedStorage['events-@easy-games/game-core:shared/game-core-networking@getEvents.Events'].useAbility:FireServer('oasis_swap_staff')
+                            end
+                            task.wait(0.1)
+                        elseif Method.Value == 'Item' then
+                            for _, tool in store.inventory.inventory.items do
+                                task.spawn(switchItem, tool.tool, 0, true)
+                            end
+                        end
+                    end
+                    task.wait()
+                until not ClientCrasher.Enabled
+            end
+        end
+    })
+
+    Method = ClientCrasher:CreateDropdown({
+        Name = 'Method',
+        List = {'Item', 'Ability'}
+    })
+end) 
+
+run(function()
+	local Viewmodel
+	local Depth
+	local Horizontal
+	local Vertical
+	local NoBob
+	local Rots = {}
+	local old, oldc1
+	
+	Viewmodel = vape.Categories.Combat:CreateModule({
+		Name = 'Viewmodel',
+		Function = function(callback)
+			local viewmodel = gameCamera:FindFirstChild('Viewmodel')
+			if callback then
+				old = bedwars.ViewmodelController.playAnimation
+				oldc1 = viewmodel and viewmodel.RightHand.RightWrist.C1 or CFrame.identity
+				if NoBob.Enabled then
+					bedwars.ViewmodelController.playAnimation = function(self, animtype, ...)
+						if bedwars.AnimationType and animtype == bedwars.AnimationType.FP_WALK then return end
+						return old(self, animtype, ...)
+					end
+				end
+	
+				bedwars.InventoryViewmodelController:handleStore(bedwars.Store:getState())
+				if viewmodel then
+					gameCamera.Viewmodel.RightHand.RightWrist.C1 = oldc1 * CFrame.Angles(math.rad(Rots[1].Value), math.rad(Rots[2].Value), math.rad(Rots[3].Value))
+				end
+				lplr.PlayerScripts.TS.controllers.global.viewmodel['viewmodel-controller']:SetAttribute('ConstantManager_DEPTH_OFFSET', -Depth.Value)
+				lplr.PlayerScripts.TS.controllers.global.viewmodel['viewmodel-controller']:SetAttribute('ConstantManager_HORIZONTAL_OFFSET', Horizontal.Value)
+				lplr.PlayerScripts.TS.controllers.global.viewmodel['viewmodel-controller']:SetAttribute('ConstantManager_VERTICAL_OFFSET', Vertical.Value)
+			else
+				bedwars.ViewmodelController.playAnimation = old
+				if viewmodel then
+					viewmodel.RightHand.RightWrist.C1 = oldc1
+				end
+	
+				bedwars.InventoryViewmodelController:handleStore(bedwars.Store:getState())
+				lplr.PlayerScripts.TS.controllers.global.viewmodel['viewmodel-controller']:SetAttribute('ConstantManager_DEPTH_OFFSET', 0)
+				lplr.PlayerScripts.TS.controllers.global.viewmodel['viewmodel-controller']:SetAttribute('ConstantManager_HORIZONTAL_OFFSET', 0)
+				lplr.PlayerScripts.TS.controllers.global.viewmodel['viewmodel-controller']:SetAttribute('ConstantManager_VERTICAL_OFFSET', 0)
+				old = nil
+			end
+		end,
+		Tooltip = 'Changes the viewmodel animations'
+	})
+	Depth = Viewmodel:CreateSlider({
+		Name = 'Depth',
+		Min = 0,
+		Max = 2,
+		Default = 0.8,
+		Decimal = 10,
+		Function = function(val)
+			if Viewmodel.Enabled then
+				lplr.PlayerScripts.TS.controllers.global.viewmodel['viewmodel-controller']:SetAttribute('ConstantManager_DEPTH_OFFSET', -val)
+			end
+		end
+	})
+	Horizontal = Viewmodel:CreateSlider({
+		Name = 'Horizontal',
+		Min = 0,
+		Max = 2,
+		Default = 0.8,
+		Decimal = 10,
+		Function = function(val)
+			if Viewmodel.Enabled then
+				lplr.PlayerScripts.TS.controllers.global.viewmodel['viewmodel-controller']:SetAttribute('ConstantManager_HORIZONTAL_OFFSET', val)
+			end
+		end
+	})
+	Vertical = Viewmodel:CreateSlider({
+		Name = 'Vertical',
+		Min = -0.2,
+		Max = 2,
+		Default = -0.2,
+		Decimal = 10,
+		Function = function(val)
+			if Viewmodel.Enabled then
+				lplr.PlayerScripts.TS.controllers.global.viewmodel['viewmodel-controller']:SetAttribute('ConstantManager_VERTICAL_OFFSET', val)
+			end
+		end
+	})
+	for _, name in {'Rotation X', 'Rotation Y', 'Rotation Z'} do
+		table.insert(Rots, Viewmodel:CreateSlider({
+			Name = name,
+			Min = 0,
+			Max = 360,
+			Function = function(val)
+				if Viewmodel.Enabled then
+					gameCamera.Viewmodel.RightHand.RightWrist.C1 = oldc1 * CFrame.Angles(math.rad(Rots[1].Value), math.rad(Rots[2].Value), math.rad(Rots[3].Value))
+				end
+			end
+		}))
+	end
+	NoBob = Viewmodel:CreateToggle({
+		Name = 'No Bobbing',
+		Default = true,
+		Function = function()
+			if Viewmodel.Enabled then
+				Viewmodel:Toggle()
+				Viewmodel:Toggle()
+			end
+		end
+	})
+end)
+
+run(function()
+    local Players = game:GetService("Players")
+    local player = Players.LocalPlayer
+    local PlayerLevel
+    local level
+
+    PlayerLevel = vape.Categories.Utility:CreateModule({
+        Name = "SetPlayerLevel",
+        Tooltip = "Sets your player level to whatever u want (just client side)",
+        Function = function()
+            player:SetAttribute("PlayerLevel", level.Value)
+        end
+    })
+
+    level = PlayerLevel:CreateSlider({
+        Name = "Player Level",
+        Min = 1,
+        Max = 1000,
+        Default = 100,
+        Function = function(val)
+            player:SetAttribute("PlayerLevel", val)
+        end
+    })
+end)
+
+run(function() 
+    local MatchHistory
+    
+    MatchHistory = vape.Categories.Utility:CreateModule({
+        Name = "MatchHistory",
+        Tooltip = "Resets ur match history",
+        Function = function(callback)
+            if callback then 
+                MatchHistory:Toggle(false)
+                local TeleportService = game:GetService("TeleportService")
+                local data = TeleportService:GetLocalPlayerTeleportData()
+                TeleportService:Teleport(game.PlaceId, game.Players.LocalPlayer, data)
+            end
+        end,
+    }) 
+end)
+
+run(function()
+	local ItemlessLongjump = {Enabled = false}
+
+	ItemlessLongjump = vape.Categories.Blatant:CreateModule({
+		Name = "ItemlessLongjump",
+		Function = function(call)
+			ItemlessLongjump.Enabled = call
+			if call then
+				lplr.Character.HumanoidRootPart.Velocity = lplr.Character.HumanoidRootPart.Velocity + Vector3.new(0, 100, 0)
+				task.wait(0.3)
+				for i = 1, 4 do
+					task.wait(0.4)
+					lplr.Character.HumanoidRootPart.Velocity = lplr.Character.HumanoidRootPart.Velocity + Vector3.new(0, 75, 0)
+				end
+				task.wait(0.025)
+				for i = 1, 2 do
+					task.wait(0.125)
+					lplr.Character.HumanoidRootPart.Velocity = lplr.Character.HumanoidRootPart.Velocity + Vector3.new(0, 85, 0)
+				end
+			else
+				workspace.Gravity = 192.6
+			end
+		end,
+		Tooltip = "lets u longjump without items/kits (thanks soyred)"
+	})
+end)
+
+run(function()
+	local Disabler
+	
+	local function characterAdded(char)
+		for _, v in getconnections(char.RootPart:GetPropertyChangedSignal('CFrame')) do
+			hookfunction(v.Function, function() end)
+		end
+		for _, v in getconnections(char.RootPart:GetPropertyChangedSignal('Velocity')) do
+			hookfunction(v.Function, function() end)
+		end
+	end
+	
+	Disabler = vape.Categories.Utility:CreateModule({
+		Name = 'Disabler',
+		Function = function(callback)
+			if callback then
+				Disabler:Clean(entitylib.Events.LocalAdded:Connect(characterAdded))
+				if entitylib.isAlive then
+					characterAdded(entitylib.character)
+				end
+			end
+		end,
+		Tooltip = 'Disables GetPropertyChangedSignal detections for movement(thanks soyred)'
+	})
+end)
+
+run(function()
+	local BetterWhisper 
+	local FlyY 
+	local Fly
+	local Heal
+	local db = false
+	local connection
+	local HealthHP
+	
+	BetterWhisper = vape.Categories.Utility:CreateModule({
+		Name = "BetterWhisper",
+		Function = function(callback)
+			if callback then
+				db = true
+				local targetplayer
+				
+				for i, v in workspace:GetDescendants() do
+					if not db then return end
+					if v:IsA("Model") then
+						if v.Name == "ServerOwl" then 
+							if v:GetAttribute("Owner") == game.Players.LocalPlayer.UserId then
+								targetplayer = game.Players:GetPlayerByUserId(v:GetAttribute("Target"))
+								local Y = math.floor(targetplayer.Character.HumanoidRootPart.Position.Y) 
+								
+								while task.wait(0.1) do
+									Y = math.floor(targetplayer.Character.HumanoidRootPart.Position.Y) 
+									
+									task.spawn(function()
+										if targetplayer.Character.Humanoid.Health <= HealthHP.Value then
+											WhisperController:request(targetplayer,"Heal")
+										end
+									end)
+									
+									if Y <= FlyY.Value then
+										WhisperController:request(targetplayer,"Fly")
+									end
+									
+									if not targetplayer.Character then break end
+								end
+							end
+						end
+					end
+				end
+				
+				connection = BetterWhisper:Clean(workspace.DescendantAdded:Connect(function(v)
+					if v:IsA("Model") then
+						if v.Name == "ServerOwl" then 
+							if v:GetAttribute("Owner") == game.Players.LocalPlayer.UserId then
+								targetplayer = game.Players:GetPlayerByUserId(v:GetAttribute("Target"))
+								local Y = math.floor(targetplayer.Character.HumanoidRootPart.Position.Y)   
+								
+								while task.wait(0.1) do
+									Y = math.floor(targetplayer.Character.HumanoidRootPart.Position.Y) 
+									
+									task.spawn(function()
+										if targetplayer.Character.Humanoid.Health <= HealthHP.Value then
+											WhisperController:request(targetplayer,"Heal")
+										end
+									end)
+									
+									if Y <= FlyY.Value then
+										WhisperController:request(targetplayer,"Fly")
+									end
+									
+									if not targetplayer.Character then break end
+								end
+							end
+						end
+					end
+				end))
+			else
+				if connection then
+					connection:Disconnect()
+				end
+				connection = nil
+				db = false
+			end
+		end,
+		Tooltip = "better whisper skills",
+	})
+	
+	FlyY = BetterWhisper:CreateSlider({
+		Name = 'Y-Level fly',
+		Min = -100,
+		Max = -50,
+		Default = -90,
+	})
+	
+	HealthHP = BetterWhisper:CreateSlider({
+		Name = 'Heal HP',
+		Min = 1,
+		Max = 99,
+		Default = 80,
+	})
+	
+	Fly = BetterWhisper:CreateToggle({
+		Name = 'Fly',
+		Default = true,
+	})
+	
+	Heal = BetterWhisper:CreateToggle({
+		Name = 'Heal',
+		Default = true,
+	})
+end)
