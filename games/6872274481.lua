@@ -2854,40 +2854,42 @@ run(function()
     local lastSwingServerTime = 0
     local lastSwingServerTimeDelta = 0
 
-    local function createRangeCircle()
-        local suc, err = pcall(function()
-            if (not shared.CheatEngineMode) then
-                RangeCirclePart = Instance.new("MeshPart")
-                RangeCirclePart.MeshId = "rbxassetid://3726303797"
-                if shared.RiseMode and GuiLibrary.GUICoreColor and GuiLibrary.GUICoreColorChanged then
-                    RangeCirclePart.Color = GuiLibrary.GUICoreColor
-                    GuiLibrary.GUICoreColorChanged.Event:Connect(function()
-                        RangeCirclePart.Color = GuiLibrary.GUICoreColor
-                    end)
-                else
-                    RangeCirclePart.Color = Color3.fromHSV(BoxSwingColor["Hue"], BoxSwingColor["Sat"], BoxSwingColor.Value)
-                end
-                RangeCirclePart.CanCollide = false
-                RangeCirclePart.Anchored = true
-                RangeCirclePart.Material = Enum.Material.Neon
-                RangeCirclePart.Size = Vector3.new(SwingRange.Value * 0.7, 0.01, SwingRange.Value * 0.7)
-                if Killaura.Enabled then
-                    RangeCirclePart.Parent = gameCamera
-                end
-                RangeCirclePart:SetAttribute("gamecore_GameQueryIgnore", true)
-            end
-        end)
-        if (not suc) then
-            pcall(function()
-                if RangeCirclePart then
-                    RangeCirclePart:Destroy()
-                    RangeCirclePart = nil
-                end
-                InfoNotification("Killaura - Range Visualiser Circle", "There was an error creating the circle. Disabling...", 2)
-            end)
-        end
-    end
-
+	local function createRangeCircle()
+		local suc, err = pcall(function()
+			if (not shared.CheatEngineMode) then
+				RangeCirclePart = Instance.new("MeshPart")
+				RangeCirclePart.MeshId = "rbxassetid://3726303797"
+				if shared.RiseMode and GuiLibrary.GUICoreColor and GuiLibrary.GUICoreColorChanged then
+					RangeCirclePart.Color = GuiLibrary.GUICoreColor
+					GuiLibrary.GUICoreColorChanged.Event:Connect(function()
+						RangeCirclePart.Color = GuiLibrary.GUICoreColor
+					end)
+				else
+					RangeCirclePart.Color = Color3.fromHSV(BoxSwingColor["Hue"], BoxSwingColor["Sat"], BoxSwingColor.Value)
+				end
+				RangeCirclePart.CanCollide = false
+				RangeCirclePart.Anchored = true
+				RangeCirclePart.Material = Enum.Material.Neon
+				RangeCirclePart.Transparency = 0.5 -- Make it semi-transparent so you can see through it
+				-- Fix: Proper circle size calculation - multiply by 2 for diameter
+				local diameter = SwingRange.Value * 2
+				RangeCirclePart.Size = Vector3.new(diameter, 0.2, diameter)
+				if Killaura.Enabled then
+					RangeCirclePart.Parent = gameCamera
+				end
+				RangeCirclePart:SetAttribute("gamecore_GameQueryIgnore", true)
+			end
+		end)
+		if (not suc) then
+			pcall(function()
+				if RangeCirclePart then
+					RangeCirclePart:Destroy()
+					RangeCirclePart = nil
+				end
+				InfoNotification("Killaura - Range Visualiser Circle", "There was an error creating the circle. Disabling...", 2)
+			end)
+		end
+	end
 	local function getAttackData()
 		if Mouse.Enabled then
 			local mousePressed = inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
@@ -13762,50 +13764,6 @@ run(function()
 		Default = true
 	})
 end)
-
-[[--run(function()
-    local ClientCrasher
-    local Method
-
-    ClientCrasher = vape.Categories.Blatant:CreateModule({
-        Name = 'Client Crasher',
-        Function = function(callback)
-            if callback then
-                for _, v in getconnections(game:GetService("ReplicatedStorage"):WaitForChild("events-@easy-games/game-core:shared/game-core-networking@getEvents.Events"):WaitForChild("abilityUsed").OnClientEvent) do
-                    v:Disconnect()    
-                end
-
-                ClientCrasher:Clean(collectionService:GetInstanceAddedSignal('inventory-entity'):Connect(function(player: Model)
-                    local item = player:WaitForChild('HandInvItem') :: IntValue?
-                    for i,v in getconnections(item.Changed) do
-                        v:Disable()
-                    end                
-                end))
-
-                repeat
-                    if entitylib.isAlive then
-                        if Method.Value == 'Ability' then
-                            for _ = 1, 25 do
-                                replicatedStorage['events-@easy-games/game-core:shared/game-core-networking@getEvents.Events'].useAbility:FireServer('oasis_swap_staff')
-                            end
-                            task.wait(0.1)
-                        elseif Method.Value == 'Item' then
-                            for _, tool in store.inventory.inventory.items do
-                                task.spawn(switchItem, tool.tool, 0, true)
-                            end
-                        end
-                    end
-                    task.wait()
-                until not ClientCrasher.Enabled
-            end
-        end
-    })
-
-    Method = ClientCrasher:CreateDropdown({
-        Name = 'Method',
-        List = {'Item', 'Ability'}
-    })
-end)--]]
 
 run(function()
 	local Viewmodel
