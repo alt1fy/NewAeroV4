@@ -13912,31 +13912,6 @@ run(function()
 	})
 end)
 
-run(function()
-    local Players = game:GetService("Players")
-    local player = Players.LocalPlayer
-    local PlayerLevel
-    local level
-
-    PlayerLevel = vape.Categories.Utility:CreateModule({
-        Name = "SetPlayerLevel",
-        Tooltip = "Sets your player level to whatever u want (just client side)",
-        Function = function()
-            player:SetAttribute("PlayerLevel", level.Value)
-        end
-    })
-
-    level = PlayerLevel:CreateSlider({
-        Name = "Player Level",
-        Min = 1,
-        Max = 1000,
-        Default = 100,
-        Function = function(val)
-            player:SetAttribute("PlayerLevel", val)
-        end
-    })
-end)
-
 run(function() 
     local MatchHistory
     
