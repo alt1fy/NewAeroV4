@@ -13763,7 +13763,7 @@ run(function()
 	})
 end)
 
-run(function()
+[[--run(function()
     local ClientCrasher
     local Method
 
@@ -13805,7 +13805,7 @@ run(function()
         Name = 'Method',
         List = {'Item', 'Ability'}
     })
-end) 
+end)--]]
 
 run(function()
 	local Viewmodel
