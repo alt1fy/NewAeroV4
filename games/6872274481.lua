@@ -13941,7 +13941,7 @@ run(function()
     local MatchHistory
     
     MatchHistory = vape.Categories.Utility:CreateModule({
-        Name = "MatchHistory",
+        Name = "ClearMatchHistory",
         Tooltip = "Resets ur match history",
         Function = function(callback)
             if callback then 
