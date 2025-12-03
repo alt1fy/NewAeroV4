@@ -1,3 +1,4 @@
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 repeat task.wait() until game:IsLoaded()
 if shared.vape then shared.vape:Uninject() end
 
@@ -229,7 +230,6 @@ local activeCheckRunning = false
 local function startActiveCheck()
     if activeCheckRunning then return end
     activeCheckRunning = true
-    
     
     while task.wait(30) do
         if shared.vape then
