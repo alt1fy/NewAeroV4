@@ -24,6 +24,30 @@ local EXPECTED_REPO_OWNER = decodeBase64(encryptedRepo)
 local EXPECTED_REPO_NAME = decodeBase64(encryptedRepoName)
 local ACCOUNT_SYSTEM_URL = decodeBase64(encryptedAccountUrl)
 
+local function createGuestValidation()
+    if not isfolder('newvape/security') then
+        makefolder('newvape/security')
+    end
+    
+    local guestId = "guest_" .. tostring(math.random(10000, 99999)) .. "_" .. tostring(os.time())
+    
+    local validationData = {
+        username = guestId,
+        timestamp = os.time(),
+        repo_owner = EXPECTED_REPO_OWNER,
+        repo_name = EXPECTED_REPO_NAME,
+        validated = true,
+        guest = true, 
+        checksum = game:GetService("HttpService"):GenerateGUID(false)
+    }
+    
+    local encoded = game:GetService("HttpService"):JSONEncode(validationData)
+    writefile('newvape/security/validated', encoded)
+    writefile('newvape/security/'..guestId, tostring(os.time()))
+    
+    return guestId
+end
+
 local function clearSecurityFolderIfDifferent(username)
     if not isfolder('newvape/security') then
         makefolder('newvape/security')
@@ -45,7 +69,7 @@ local function clearSecurityFolderIfDifferent(username)
     end
 end
 
-local function createValidationFile(username, repoInfo)
+local function createValidationFile(username, repoInfo, isGuest)
     if not isfolder('newvape/security') then
         makefolder('newvape/security')
     end
@@ -56,6 +80,7 @@ local function createValidationFile(username, repoInfo)
         repo_owner = repoInfo.owner,
         repo_name = repoInfo.name,
         validated = true,
+        guest = isGuest or false, 
         checksum = game:GetService("HttpService"):GenerateGUID(false)
     }
     
@@ -89,36 +114,39 @@ end
 
 local function SecurityCheck(loginData)
     if not loginData or type(loginData) ~= "table" then
+        local guestId = createGuestValidation()
         game.StarterGui:SetCore("SendNotification", {
-            Title = "Security Error",
-            Text = "wrong loadstring bitch. dm aero",
-            Duration = 3
+            Title = "Guest Mode",
+            Text = "running as guest",
+            Duration = 1
         })
-        return false
+        return true, guestId, true 
     end
     
     local inputUsername = loginData.Username
     local inputPassword = loginData.Password
     
     if not inputUsername or not inputPassword then
+        local guestId = createGuestValidation()
         game.StarterGui:SetCore("SendNotification", {
-            Title = "Security Error", 
-            Text = "missing yo credentials fuck u doing? dm aero",
-            Duration = 3
+            Title = "Guest Mode",
+            Text = "running as guest",
+            Duration = 1
         })
-        return false
+        return true, guestId, true
     end
     
     clearSecurityFolderIfDifferent(inputUsername)
     
     local accounts = fetchAccounts()
     if not accounts then
+        local guestId = createGuestValidation()
         game.StarterGui:SetCore("SendNotification", {
-            Title = "Connection Error",
-            Text = "failed to check if its yo account check your wifi it might be shitty. dm aero",
-            Duration = 3
+            Title = "Guest Mode",
+            Text = "connection failed Running as guest.",
+            Duration = 1
         })
-        return false
+        return true, guestId, true
     end
     
     local accountFound = false
@@ -132,34 +160,41 @@ local function SecurityCheck(loginData)
     end
     
     if not accountFound then
+        local guestId = createGuestValidation()
         game.StarterGui:SetCore("SendNotification", {
-            Title = "Access Denied",
-            Text = "wrong info dm 5qvx for access",
-            Duration = 3
+            Title = "Guest Mode",
+            Text = "invalid credentials running as guest.",
+            Duration = 1
         })
-        return false
+        return true, guestId, true
     end
     
     if not accountActive then
+        local guestId = createGuestValidation()
         game.StarterGui:SetCore("SendNotification", {
-            Title = "Account Inactive",
-            Text = "Your account is currently inactive.",
-            Duration = 3
+            Title = "Guest Mode",
+            Text = "account inactive running as guest.",
+            Duration = 1
         })
-        return false
+        return true, guestId, true
     end
     
     local repoInfo = getRepoInfo()
-    createValidationFile(inputUsername, repoInfo)
+    createValidationFile(inputUsername, repoInfo, false)
     
-    return true
+    return true, inputUsername, false
 end
 
 local passedArgs = ... or {}
 
-if not SecurityCheck(passedArgs) then
+local securitySuccess, username, isGuest = SecurityCheck(passedArgs)
+
+if not securitySuccess then
     return
 end
+
+shared.IsGuestAccount = isGuest
+shared.ValidatedUsername = username
 
 if not isfolder('newvape/security') then
     makefolder('newvape/security')
