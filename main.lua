@@ -1,5 +1,6 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 repeat task.wait() until game:IsLoaded()
 if shared.vape then shared.vape:Uninject() end
 
@@ -8,14 +9,6 @@ if identifyexecutor then
 		getgenv().setthreadidentity = nil
 	end
 end
-
-local securityPassed, validatedUsername, isGuest = validateSecurity()
-if not securityPassed then
-    return
-end
-
-shared.ValidatedUsername = validatedUsername
-shared.IsGuestAccount = isGuest or false
 
 local vape
 local loadstring = function(...)
@@ -73,7 +66,6 @@ local encryptedAccountUrl = "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL3dyZWF
 local ACCOUNT_SYSTEM_URL = decodeBase64(encryptedAccountUrl)
 
 local function checkAccountActive()
-    -- Guest accounts are always active (no checks needed)
     if shared.IsGuestAccount then
         return true
     end
@@ -104,7 +96,6 @@ end
 
 local activeCheckRunning = false
 local function startActiveCheck()
-    -- Don't run active checks for guest accounts
     if shared.IsGuestAccount then
         return
     end
@@ -133,7 +124,6 @@ local function startActiveCheck()
     activeCheckRunning = false
 end
 
--- Only run account checks for non-guest accounts
 if shared.ValidatedUsername and not shared.IsGuestAccount then
     task.spawn(function()
         task.wait(2)
@@ -204,12 +194,6 @@ local function finishLoading()
             local guiMessage = (vape.VapeButton and 'Press the button in the top right to open GUI' or 'Press '..table.concat(vape.Keybind, ' + '):upper()..' to open GUI')
             
 			vape:CreateNotification(welcomeMessage, userMessage..guiMessage, 5)
-            
-            -- Show guest notification if in guest mode
-            if shared.IsGuestAccount then
-                task.wait(1)
-                vape:CreateNotification('Guest Mode', 'You are running in guest mode. No time limits apply.', 5)
-            end
 		end
 	end
 end
