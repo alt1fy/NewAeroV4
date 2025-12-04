@@ -1,6 +1,4 @@
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 
 local run = function(func)
@@ -1247,13 +1245,16 @@ run(function()
 	local AimPart
 	local ProjectileMode
 	local ProjectileAimSpeed
+	local WorkWithAllItems 
 	
 	AimAssist = vape.Categories.Combat:CreateModule({
 		Name = 'AimAssist',
 		Function = function(callback)
 			if callback then
 				AimAssist:Clean(runService.Heartbeat:Connect(function(dt)
-					if entitylib.isAlive and hasValidWeapon() and ((not ClickAim.Enabled) or (workspace:GetServerTimeNow() - bedwars.SwordController.lastAttack) < 0.4) then
+					local validWeaponCheck = WorkWithAllItems.Enabled or hasValidWeapon()
+					
+					if entitylib.isAlive and validWeaponCheck and ((not ClickAim.Enabled) or (workspace:GetServerTimeNow() - bedwars.SwordController.lastAttack) < 0.4) then
 						if FirstPersonCheck.Enabled then
 							if not isFirstPerson() then return end
 						end
@@ -1263,7 +1264,7 @@ run(function()
 							if isShop then return end
 						end
 						
-						local useProjectileMode = ProjectileMode.Enabled and isHoldingProjectile()
+						local useProjectileMode = ProjectileMode.Enabled and (WorkWithAllItems.Enabled or isHoldingProjectile())
 						local effectiveDistance = useProjectileMode and Distance.Value or Distance.Value
 						
 						local ent = KillauraTarget.Enabled and store.KillauraTarget or entitylib.EntityPosition({
@@ -1304,7 +1305,7 @@ run(function()
 							
 							if useProjectileMode then
 								local projSpeed = 100 
-								if store.hand.tool then
+								if store.hand.tool and (WorkWithAllItems.Enabled or isHoldingProjectile()) then
 									local toolMeta = bedwars.ItemMeta[store.hand.tool.Name]
 									if toolMeta and toolMeta.projectileSource then
 										local projectileType = toolMeta.projectileSource.projectileType('arrow')
@@ -1487,6 +1488,16 @@ run(function()
 	StrafeIncrease = AimAssist:CreateToggle({
 		Name = 'Strafe increase',
 		Tooltip = 'Faster aim when strafing (A/D)'
+	})
+	WorkWithAllItems = AimAssist:CreateToggle({
+		Name = 'Work With All Items',
+		Default = false,
+		Tooltip = 'Bypass weapon type check - works with ANY item in your hand',
+		Function = function(callback)
+			if callback then
+				notif('AimAssist', 'Now works with all items!', 3)
+			end
+		end
 	})
 end)
 	
@@ -2753,7 +2764,6 @@ run(function()
     local AnimationSpeed
     local AnimationTween
     local Limit
-	local SwingAngleSlider
     local LegitAura
     local SyncHits
     local lastAttackTime = 0
@@ -2855,39 +2865,63 @@ run(function()
     local lastSwingServerTime = 0
     local lastSwingServerTimeDelta = 0
 
-    local function createRangeCircle()
-        local suc, err = pcall(function()
-            if (not shared.CheatEngineMode) then
-                RangeCirclePart = Instance.new("MeshPart")
-                RangeCirclePart.MeshId = "rbxassetid://3726303797"
-                if shared.RiseMode and GuiLibrary.GUICoreColor and GuiLibrary.GUICoreColorChanged then
-                    RangeCirclePart.Color = GuiLibrary.GUICoreColor
-                    GuiLibrary.GUICoreColorChanged.Event:Connect(function()
-                        RangeCirclePart.Color = GuiLibrary.GUICoreColor
-                    end)
-                else
-                    RangeCirclePart.Color = Color3.fromHSV(BoxSwingColor["Hue"], BoxSwingColor["Sat"], BoxSwingColor.Value)
-                end
-                RangeCirclePart.CanCollide = false
-                RangeCirclePart.Anchored = true
-                RangeCirclePart.Material = Enum.Material.Neon
-                RangeCirclePart.Size = Vector3.new(SwingRange.Value * 0.7, 0.01, SwingRange.Value * 0.7)
-                if Killaura.Enabled then
-                    RangeCirclePart.Parent = gameCamera
-                end
-                RangeCirclePart:SetAttribute("gamecore_GameQueryIgnore", true)
-            end
-        end)
-        if (not suc) then
-            pcall(function()
-                if RangeCirclePart then
-                    RangeCirclePart:Destroy()
-                    RangeCirclePart = nil
-                end
-                InfoNotification("Killaura - Range Visualiser Circle", "There was an error creating the circle. Disabling...", 2)
-            end)
-        end
-    end
+	local function createRangeCircle()
+		local suc, err = pcall(function()
+			if RangeCirclePart then
+				RangeCirclePart:Destroy()
+				RangeCirclePart = nil
+			end
+			
+			if (not shared.CheatEngineMode) then
+				RangeCirclePart = Instance.new("Part")
+				RangeCirclePart.Shape = Enum.PartType.Cylinder
+				RangeCirclePart.Material = Enum.Material.Neon
+				RangeCirclePart.CanCollide = false
+				RangeCirclePart.Anchored = true
+				RangeCirclePart.CanQuery = false
+				RangeCirclePart.CanTouch = false
+				RangeCirclePart.CastShadow = false
+				RangeCirclePart.Transparency = 0.5
+				RangeCirclePart.TopSurface = Enum.SurfaceType.Smooth
+				RangeCirclePart.BottomSurface = Enum.SurfaceType.Smooth
+				
+				local diameter = AttackRange.Value * 2
+				RangeCirclePart.Size = Vector3.new(0.2, diameter, diameter)
+				
+				RangeCirclePart.Orientation = Vector3.new(0, 0, 90)
+				
+				if shared.RiseMode and GuiLibrary.GUICoreColor and GuiLibrary.GUICoreColorChanged then
+					RangeCirclePart.Color = GuiLibrary.GUICoreColor
+					GuiLibrary.GUICoreColorChanged.Event:Connect(function()
+						if RangeCirclePart then
+							RangeCirclePart.Color = GuiLibrary.GUICoreColor
+						end
+					end)
+				else
+					RangeCirclePart.Color = Color3.fromHSV(BoxSwingColor["Hue"], BoxSwingColor["Sat"], BoxSwingColor.Value)
+				end
+				
+				RangeCirclePart:SetAttribute("gamecore_GameQueryIgnore", true)
+				
+				if Killaura.Enabled then
+					RangeCirclePart.Parent = gameCamera
+					
+					if entitylib.isAlive and entitylib.character.HumanoidRootPart then
+						RangeCirclePart.Position = entitylib.character.HumanoidRootPart.Position - Vector3.new(0, entitylib.character.Humanoid.HipHeight + 2, 0)
+					end
+				end
+			end
+		end)
+		if (not suc) then
+			pcall(function()
+				if RangeCirclePart then
+					RangeCirclePart:Destroy()
+					RangeCirclePart = nil
+				end
+				InfoNotification("Killaura - Range Visualiser Circle", "There was an error creating the circle: " .. tostring(err), 3)
+			end)
+		end
+	end
 
 	local function getAttackData()
 		if Mouse.Enabled then
@@ -3035,7 +3069,10 @@ run(function()
                 repeat
                     pcall(function()
                         if entitylib.isAlive and entitylib.character.HumanoidRootPart then
-                            TweenService:Create(RangeCirclePart, TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Position = entitylib.character.HumanoidRootPart.Position - Vector3.new(0, entitylib.character.Humanoid.HipHeight, 0)}):Play()
+							if RangeCirclePart and entitylib.isAlive and entitylib.character.HumanoidRootPart then
+								local rootPos = entitylib.character.HumanoidRootPart.Position
+								RangeCirclePart.CFrame = CFrame.new(rootPos.X, rootPos.Y - 2.8, rootPos.Z) * CFrame.Angles(0, 0, math.rad(90))
+							end
                         end
                     end)
 
@@ -3064,9 +3101,7 @@ run(function()
 						for _, v in plrs do
 							local delta = (v.RootPart.Position - selfpos)
 							local angle = math.acos(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit))
-							local swingAngle = SwingAngleSlider and math.rad(SwingAngleSlider.Value) or math.rad(AngleSlider.Value)
-							
-							if angle <= (swingAngle / 2) then
+							if angle <= (math.rad(AngleSlider.Value) / 2) then
 								hasValidTargets = true
 								break
 							end
@@ -3085,8 +3120,7 @@ run(function()
 								for _, v in plrs do
 									local delta = (v.RootPart.Position - selfpos)
 									local angle = math.acos(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit))
-									local swingAngle = SwingAngleSlider and math.rad(SwingAngleSlider.Value) or math.rad(AngleSlider.Value)
-									if angle > (swingAngle / 2) then continue end
+									if angle > (math.rad(AngleSlider.Value) / 2) then continue end
 
 									table.insert(attacked, {
 										Entity = v,
@@ -3377,12 +3411,6 @@ run(function()
         Max = 360,
         Default = 360
     })
-	SwingAngleSlider = Killaura:CreateSlider({
-		Name = 'Swing angle',
-		Min = 1,
-		Max = 360,
-		Default = 360
-	})
     UpdateRate = Killaura:CreateSlider({
         Name = 'Update rate',
         Min = 1,
@@ -8199,7 +8227,7 @@ run(function()
 		
 		local pos = cannon.Position
 		local res
-		task.delay(0, function()
+		task.delay(0.2, function()
 			local block, blockpos = getPlacedBlock(pos)
 			if block and block.Name == 'cannon' and (entitylib.character.RootPart.Position - block.Position).Magnitude < 20 then
 				local broken = 0.1
@@ -8585,6 +8613,7 @@ end)
 	
 run(function()
 	local AutoPearl
+	local LimitItem
 	local rayCheck = RaycastParams.new()
 	rayCheck.RespectCanCollide = true
 	local projectileRemote = {InvokeServer = function() end}
@@ -8621,10 +8650,93 @@ run(function()
 						rayCheck.CollisionGroup = root.CollisionGroup
 	
 						if pearl and root.Velocity.Y < -100 and not workspace:Raycast(root.Position, Vector3.new(0, -200, 0), rayCheck) then
-							if not check then
+							if LimitItem.Enabled then
+								if store.hand.tool and store.hand.tool.Name == 'telepearl' then
+									if not check then
+										check = true
+										local ground = getNearGround(20)
+		
+										if ground then
+											firePearl(root.Position, ground, pearl)
+										end
+									end
+								end
+							else
+								if not check then
+									check = true
+									local ground = getNearGround(20)
+	
+									if ground then
+										firePearl(root.Position, ground, pearl)
+									end
+								end
+							end
+						else
+							check = false
+						end
+					end
+					task.wait(0.1)
+				until not AutoPearl.Enabled
+			end
+		end,
+		Tooltip = 'Automatically throws a pearl onto nearby ground after\nfalling a certain distance.'
+	})
+	
+	LimitItem = AutoPearl:CreateToggle({
+		Name = 'Limit to items',
+		Default = false,
+		Tooltip = 'Only throw pearls when holding a pearl'
+	})
+end)
+
+run(function()
+	local AutoPearl
+	local LimitItem
+	local rayCheck = RaycastParams.new()
+	rayCheck.RespectCanCollide = true
+	local projectileRemote = {InvokeServer = function() end}
+	task.spawn(function()
+		projectileRemote = bedwars.Client:Get(remotes.FireProjectile).instance
+	end)
+	
+	local function firePearl(pos, spot, item)
+		switchItem(item.tool)
+		local meta = bedwars.ProjectileMeta.telepearl
+		local calc = prediction.SolveTrajectory(pos, meta.launchVelocity, meta.gravitationalAcceleration, spot, Vector3.zero, workspace.Gravity, 0, 0)
+	
+		if calc then
+			local dir = CFrame.lookAt(pos, calc).LookVector * meta.launchVelocity
+			bedwars.ProjectileController:createLocalProjectile(meta, 'telepearl', 'telepearl', pos, nil, dir, {drawDurationSeconds = 1})
+			projectileRemote:InvokeServer(item.tool, 'telepearl', 'telepearl', pos, pos, dir, httpService:GenerateGUID(true), {drawDurationSeconds = 1, shotId = httpService:GenerateGUID(false)}, workspace:GetServerTimeNow() - 0.045)
+		end
+	
+		if store.hand then
+			switchItem(store.hand.tool)
+		end
+	end
+	
+	AutoPearl = vape.Categories.Utility:CreateModule({
+		Name = 'AutoPearl',
+		Function = function(callback)
+			if callback then
+				local check
+				repeat
+					if entitylib.isAlive then
+						local root = entitylib.character.RootPart
+						local pearl = getItem('telepearl')
+						rayCheck.FilterDescendantsInstances = {lplr.Character, gameCamera, AntiFallPart}
+						rayCheck.CollisionGroup = root.CollisionGroup
+	
+						if pearl and root.Velocity.Y < -100 and not workspace:Raycast(root.Position, Vector3.new(0, -200, 0), rayCheck) then
+							local shouldThrow = true
+							if LimitItem.Enabled then
+								shouldThrow = store.hand.tool and store.hand.tool.Name == 'telepearl'
+							end
+							
+							if shouldThrow and not check then
 								check = true
 								local ground = getNearGround(20)
-	
+
 								if ground then
 									firePearl(root.Position, ground, pearl)
 								end
@@ -8638,6 +8750,12 @@ run(function()
 			end
 		end,
 		Tooltip = 'Automatically throws a pearl onto nearby ground after\nfalling a certain distance.'
+	})
+	
+	LimitItem = AutoPearl:CreateToggle({
+		Name = 'Limit to items',
+		Default = false,
+		Tooltip = 'Only throw pearls when holding a pearl'
 	})
 end)
 	
@@ -14043,4 +14161,363 @@ run(function()
 		Name = 'Heal',
 		Default = true,
 	})
+end)
+
+run(function()
+	local PlayerGui = lplr:WaitForChild("PlayerGui")
+	local MutipleKits 
+	MutipleKits = vape.Categories.Blatant:CreateModule({
+		Name = "MultiKits",
+		Function = function(callback)
+			if callback then
+				local draft = PlayerGui:FindFirstChild("MatchDraftApp")
+				local header = draft:FindFirstChild('DraftAppBackground'):FindFirstChild('HeaderContainer'):FindFirstChild('1'):FindFirstChild('PhaseTitleContainer'):FindFirstChild('1')
+				local kitSelection = draft:FindFirstChild('DraftAppBackground'):FindFirstChild('BodyContainer'):FindFirstChild('KitSelection')																																												
+				if not bedwars.AppController:isAppOpen('MatchDraftApp') then
+					getgenv().BEN("couldn't find MatchDraftApp")
+					return																																												
+				end
+				if not kitSelection or not header.Text == "SELECT YOUR KIT" then
+					getgenv().BEN("could not find kit selection, you must be in kit selection mode")
+					return																																												
+				end
+				getgenv().BIN("Please select your kit")
+				task.wait(2)
+				getgenv().BIN("SPAM CLICK THE RANDOM KIT")
+
+			end
+		end,
+		Tooltip = "5v5, ranked only allow's u to have mutiple kit's in a game -- NOTE THIS WILL NOT WORK EVERYTIME",
+	})
+end)
+
+run(function()
+	local Clutch
+	local runService = game:GetService("RunService")
+	local workspace = game:GetService("Workspace")
+	local HoldBase = 0.15
+	local FallVelocity = -6
+	local lastPlace = 0
+	local UseBlacklisted_Blocks
+	local blacklisted
+	local clutchCount = 0
+	local lastResetTime = 0
+	
+	local function callPlace(blockpos, wool, rotate)
+		local placeFn
+		if type(vape) == "table" and type(vape.clean) == "function" then
+			vape:clean(blockpos, wool, rotate)
+			return
+		end
+		if type(vape) == "table" and type(vape.place) == "function" then
+			placeFn = vape.place
+		elseif type(place) == "function" then
+			placeFn = place
+		else
+			placeFn = bedwars.placeBlock
+		end
+		task.spawn(placeFn, blockpos, wool, rotate)
+	end
+
+	local function nearCorner(poscheck, pos)
+		local startpos = poscheck - Vector3.new(3, 3, 3)
+		local endpos = poscheck + Vector3.new(3, 3, 3)
+		local check = poscheck + (pos - poscheck).Unit * 100
+		return Vector3.new(math.clamp(check.X, startpos.X, endpos.X), math.clamp(check.Y, startpos.Y, endpos.Y), math.clamp(check.Z, startpos.Z, endpos.Z))
+	end
+
+	local function blockProximity(pos)
+		local mag, returned = 60
+		local tab = getBlocksInPoints(bedwars.BlockController:getBlockPosition(pos - Vector3.new(21, 21, 21)), bedwars.BlockController:getBlockPosition(pos + Vector3.new(21, 21, 21)))
+		for _, v in tab do
+			local blockpos = nearCorner(v, pos)
+			local newmag = (pos - blockpos).Magnitude
+			if newmag < mag then
+				mag, returned = newmag, blockpos
+			end
+		end
+		table.clear(tab)
+		return returned
+	end
+
+	local function getClutchBlock()
+		if store.hand.toolType == 'block' then
+			return store.hand.tool.Name, store.hand.amount
+		end
+		return nil, 0
+	end
+
+	Clutch = vape.Categories.Utility:CreateModule({
+		Name = 'Clutch',
+		Function = function(call)
+			if call then
+				clutchCount = 0
+				lastResetTime = os.clock()
+				
+				Clutch:Clean(runService.Heartbeat:Connect(function()
+					if not Clutch.Enabled then
+						return
+					end
+					if not entitylib.isAlive then
+						return
+					end
+					local root = entitylib.character.RootPart
+					if not root or inputService:GetFocusedTextBox() then
+						return
+					end
+
+					if Clutch.HeightCheck and Clutch.HeightCheck.Enabled then
+						local minHeight = (Clutch.MinHeight and Clutch.MinHeight.Value) or 20
+						if root.Position.Y < minHeight then
+							return
+						end
+					end
+
+					if Clutch.MinBlocks and Clutch.MinBlocks.Enabled then
+						local _, amount = getClutchBlock()
+						local minRequired = (Clutch.MinBlockAmount and Clutch.MinBlockAmount.Value) or 5
+						if amount < minRequired then
+							if Clutch.NotifyLowBlocks and Clutch.NotifyLowBlocks.Enabled then
+								notif('Clutch', 'Low on blocks! ('..amount..' left)', 2)
+							end
+							return
+						end
+					end
+
+					if Clutch.LimitToItems and Clutch.LimitToItems.Enabled then
+						if getClutchBlock then
+							if store.hand.toolType ~= "block" then
+								return
+							end
+						end
+					end
+					
+					local wool = select(1, getClutchBlock())
+					if not wool then
+						return
+					end
+					
+					if wool and not UseBlacklisted_Blocks.Enabled then
+						for i,v in blacklisted.ListEnabled do
+							if wool == v then
+								return																																																																																																																																																																									
+							end																																																																																																																																																																												
+						end
+					end
+					
+					if Clutch.RequireMouse and Clutch.RequireMouse.Enabled and not inputService:IsMouseButtonPressed(0) then
+						return
+					end
+					
+					local vy = root.Velocity.Y
+					local now = os.clock()
+					
+					if (now - lastResetTime) > 5 then
+						clutchCount = 0
+						lastResetTime = now
+					end
+					
+					local speedVal = (Clutch.Speed and Clutch.Speed.Value) or 0
+					local cooldown = math.clamp(HoldBase - (speedVal * 0.015), 0.01, HoldBase)
+					
+					if vy < FallVelocity and (now - lastPlace) > cooldown then
+						local target = roundPos(root.Position - Vector3.new(0, entitylib.character.HipHeight + 4.5, 0))
+						local exists, blockpos = getPlacedBlock(target)
+						
+						if not exists then
+							local prox = blockProximity(target)
+							local placePos = prox or (target * 3)
+							
+							callPlace(placePos, wool, false)
+							lastPlace = now
+							clutchCount = clutchCount + 1
+							
+							
+							if Clutch.SilentAim and Clutch.SilentAim.Enabled then
+								local camera = workspace.CurrentCamera
+								local camCFrame = camera and camera.CFrame
+								local camType = camera and camera.CameraType
+								local camSubject = camera and camera.CameraSubject
+								local lv = root.CFrame.LookVector
+								local newLook = -Vector3.new(lv.X, 0, lv.Z).Unit
+								local rootPos = root.Position
+								root.CFrame = CFrame.new(rootPos, rootPos + newLook)
+								if camera and camCFrame then
+									camera.CameraType = camType
+									camera.CameraSubject = camSubject
+									camera.CFrame = camCFrame
+								end
+							end
+						end
+					end
+				end))
+			end
+		end,
+		Tooltip = 'Automatically places a block when falling to clutch'
+	})
+
+	UseBlacklisted_Blocks = Clutch:CreateToggle({
+		Name = "Use Blacklisted Blocks",
+		Default = false,
+		Tooltip = "Allows clutching with blacklisted blocks"
+	})
+
+	blacklisted = Clutch:CreateTextList({
+		Name = "Blacklisted Blocks",
+		Placeholder = "tnt"
+	})
+	
+	Clutch.LimitToItems = Clutch:CreateToggle({
+		Name = 'Limit to items',
+		Default = false,
+		Tooltip = "Only clutch when holding blocks"
+	})
+
+	Clutch.RequireMouse = Clutch:CreateToggle({
+		Name = 'Require mouse down',
+		Default = false,
+		Tooltip = "Only clutch when holding left click"
+	})
+
+	Clutch.SilentAim = Clutch:CreateToggle({
+		Name = 'Silent Aim',
+		Default = false,
+		Tooltip = "Looks down while placing without moving camera"
+	})
+
+	Clutch.HeightCheck = Clutch:CreateToggle({
+		Name = 'Height Check',
+		Default = false,
+		Tooltip = "Only clutch above minimum height (prevents void clutching)"
+	})
+
+	Clutch.MinBlocks = Clutch:CreateToggle({
+		Name = 'Min Block Check',
+		Default = false,
+		Tooltip = "Disables clutch when running low on blocks"
+	})
+
+	Clutch.NotifyClutch = Clutch:CreateToggle({
+		Name = 'Notify Clutch',
+		Default = false,
+		Tooltip = "Shows notification when you clutch"
+	})
+
+	Clutch.NotifyLowBlocks = Clutch:CreateToggle({
+		Name = 'Notify Low Blocks',
+		Default = false,
+		Tooltip = "Warns you when running out of blocks"
+	})
+
+	Clutch.AutoDisable = Clutch:CreateToggle({
+		Name = 'Auto Disable',
+		Default = false,
+		Tooltip = "Disables clutch when you run out of blocks"
+	})
+
+	Clutch.Speed = Clutch:CreateSlider({
+		Name = 'Speed',
+		Min = 0,
+		Max = 9,
+		Default = 6,
+		Tooltip = "How fast to place blocks"
+	})
+
+	Clutch.MinHeight = Clutch:CreateSlider({
+		Name = 'Min Height',
+		Min = 0,
+		Max = 50,
+		Default = 20,
+		Tooltip = "Minimum Y position to clutch (prevents void)"
+	})
+
+	Clutch.MinBlockAmount = Clutch:CreateSlider({
+		Name = 'Min Block Amount',
+		Min = 1,
+		Max = 32,
+		Default = 5,
+		Tooltip = "Minimum blocks required to clutch"
+	})
+
+	task.spawn(function()
+		while task.wait(0.5) do
+			if Clutch.Enabled and Clutch.AutoDisable and Clutch.AutoDisable.Enabled then
+				local wool, amount = getClutchBlock()
+				if amount == 0 then
+					notif('Clutch', 'Out of blocks! Auto disabled.', 3)
+					Clutch:Toggle()
+				end
+			end
+		end
+	end)
+end)
+
+run(function()
+    local MouseHiderV2 = {}
+    local isActive = false
+    local renderConnection
+    
+    local function isFirstPerson()
+        if not (lplr.Character and lplr.Character:FindFirstChild("HumanoidRootPart")) then 
+            return false 
+        end
+        
+        local characterPos = lplr.Character.HumanoidRootPart.Position
+        local cameraPos = gameCamera.CFrame.Position
+        local distance = (characterPos - cameraPos).Magnitude
+        
+        return distance < 5 
+    end
+    
+    local function hideMouseInFirstPerson()
+        if not isActive then return end
+        
+        if isFirstPerson() then
+            pcall(function()
+                inputService.MouseIconEnabled = false
+            end)
+        else
+            pcall(function()
+                inputService.MouseIconEnabled = true
+            end)
+        end
+    end
+    
+    MouseHiderV2 = vape.Categories.Utility:CreateModule({
+        Name = 'InvisibleCursor',
+        Function = function(callback)
+            if callback then
+                isActive = true
+                
+                local success, originalState = pcall(function()
+                    return inputService.MouseIconEnabled
+                end)
+                
+                if renderConnection then
+                    renderConnection:Disconnect()
+                end
+                
+                renderConnection = runService.RenderStepped:Connect(hideMouseInFirstPerson)
+                
+                notif('Mouse Hider', 'Cursor hidden in first person', 2)
+            else
+                isActive = false
+                
+                if renderConnection then
+                    renderConnection:Disconnect()
+                    renderConnection = nil
+                end
+                
+                pcall(function()
+                    inputService.MouseIconEnabled = true
+                end)
+            end
+        end,
+        Tooltip = 'Hides mouse in first person only'
+    })
+    
+    MouseHiderV2:CreateToggle({
+        Name = 'Enabled',
+        Function = function() end 
+    })
 end)
