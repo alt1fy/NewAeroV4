@@ -1,5 +1,6 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local mainapi = {
 	Categories = {},
 	GUIColor = {
@@ -2459,13 +2460,14 @@ task.spawn(function()
 end)
 
 function mainapi:BlurCheck()
-  if not inputService.KeyboardEnabled then
-      return
-  end
-	if self.ThreadFix then
-		setthreadidentity(8)
-		runService:SetRobloxGuiFocused((clickgui.Visible or guiService:GetErrorType() ~= Enum.ConnectionError.OK) and self.Blur.Enabled)
-	end
+    if not inputService.KeyboardEnabled then
+        return  
+    end
+    if self.ThreadFix then
+        setthreadidentity(8)
+        local shouldBlur = (clickgui.Visible or guiService:GetErrorType() ~= Enum.ConnectionError.OK) and self.Blur.Enabled
+        runService:SetRobloxGuiFocused(shouldBlur)
+    end
 end
 
 addMaid(mainapi)
@@ -5272,23 +5274,26 @@ function mainapi:CreateLegit()
 	return legitapi
 end
 
-function mainapi:CreateNotification(title, text, duration, type)
+function mainapi:CreateNotification(title, text, duration, type, custom, customsize)
 	if not self.Notifications.Enabled then return end
-	task.delay(0, function()
-		if self.ThreadFix then
-			setthreadidentity(8)
-		end
+	if getgenv().closet then return end  
+    task.delay(0, function()
+        local rescaled = 1
+        if self.ThreadFix then
+            setthreadidentity(8)
+        end
 		local i = #notifications:GetChildren() + 1
-		local notification = Instance.new('ImageLabel')
-		notification.Name = 'Notification'
-		notification.Size = UDim2.fromOffset(math.max(getfontsize(removeTags(text), 14, uipallet.Font).X + 80, 266), 75)
-		notification.Position = UDim2.new(1, 0, 1, -(29 + (78 * i)))
-		notification.ZIndex = 5
-		notification.BackgroundTransparency = 1
-		notification.Image = getcustomasset('newvape/assets/new/notification.png')
-		notification.ScaleType = Enum.ScaleType.Slice
-		notification.SliceCenter = Rect.new(7, 7, 9, 9)
-		notification.Parent = notifications
+        
+        local notification = Instance.new('ImageLabel')
+        notification.Name = 'Notification'
+        notification.Size = UDim2.fromOffset(math.max(getfontsize(removeTags(text), 14 * rescaled, uipallet.Font).X + 80, 266) * rescaled, 75 * rescaled)
+        notification.Position = UDim2.new(1, 0, 1, -(29 + (78 * i)))
+        notification.ZIndex = 5 
+        notification.BackgroundTransparency = 1
+        notification.Image = getcustomasset('newvape/assets/new/notification.png')
+        notification.ScaleType = Enum.ScaleType.Slice
+        notification.SliceCenter = Rect.new(7, 7, 9, 9)
+        notification.Parent = notifications
 		addBlur(notification, true)
 		local iconshadow = Instance.new('ImageLabel')
 		iconshadow.Name = 'Icon'
@@ -5357,7 +5362,7 @@ function mainapi:CreateNotification(title, text, duration, type)
 		task.delay(duration, function()
 			if tween.Tween then
 				tween:Tween(notification, TweenInfo.new(0.4, Enum.EasingStyle.Exponential), {
-					AnchorPoint = Vector2.new(0, 0)
+					AnchorPoint = Vector2.new(1, 0)  
 				}, tween.tweenstwo)
 			end
 			task.wait(0.2)
@@ -5659,7 +5664,7 @@ gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 gui.IgnoreGuiInset = true
 gui.OnTopOfCoreBlur = true
 if mainapi.ThreadFix then
-	gui.Parent = cloneref(game:GetService('CoreGui'))--(gethui and gethui()) or cloneref(game:GetService('CoreGui'))
+	gui.Parent = cloneref(game:GetService('CoreGui'))
 else
 	gui.Parent = cloneref(game:GetService('Players')).LocalPlayer.PlayerGui
 	gui.ResetOnSpawn = false
@@ -5699,7 +5704,7 @@ cursor.Image = 'rbxasset://textures/Cursors/KeyboardMouse/ArrowFarCursor.png'
 cursor.Parent = gui
 notifications = Instance.new('Folder')
 notifications.Name = 'Notifications'
-notifications.Parent = scaledgui
+notifications.Parent = scaledgui  
 tooltip = Instance.new('TextLabel')
 tooltip.Name = 'Tooltip'
 tooltip.Position = UDim2.fromScale(-1, -1)
@@ -6947,13 +6952,13 @@ function mainapi:UpdateGUI(hue, sat, val, default)
 end
 
 mainapi:Clean(notifications.ChildRemoved:Connect(function()
-	for i, v in notifications:GetChildren() do
-		if tween.Tween then
-			tween:Tween(v, TweenInfo.new(0.4, Enum.EasingStyle.Exponential), {
-				Position = UDim2.new(1, 0, 1, -(29 + (78 * i)))
-			})
-		end
-	end
+    for i, v in notifications:GetChildren() do
+        if tween.Tween then
+            tween:Tween(v, TweenInfo.new(0.4, Enum.EasingStyle.Exponential), {
+                Position = UDim2.new(1, 0, 1, -(29 + (78 * i)))
+            })
+        end
+    end
 end))
 
 mainapi:Clean(inputService.InputBegan:Connect(function(inputObj)
