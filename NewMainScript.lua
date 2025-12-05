@@ -1,6 +1,5 @@
 local SecurityModule = {}
 
--- Obfuscated Pastebin URL
 local function decodeBase64(data)
     local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
     data = string.gsub(data, '[^'..b..'=]', '')
@@ -17,17 +16,13 @@ local function decodeBase64(data)
     end))
 end
 
--- Your Pastebin URL encoded (change if you made a new paste)
 local encryptedAccountUrl = "aHR0cHM6Ly9wYXN0ZWJpbi5jb20vcmF3LzFNVThFcVBX"
 local ACCOUNT_SYSTEM_URL = decodeBase64(encryptedAccountUrl)
 
--- Get HWID
 local function getHWID()
     local hwid = gethwid and gethwid() or game:GetService("RbxAnalyticsService"):GetClientId()
     return hwid
 end
-
--- Guest validation
 local function createGuestValidation()
     if not isfolder('newvape/security') then
         makefolder('newvape/security')
