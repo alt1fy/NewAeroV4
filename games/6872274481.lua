@@ -2781,7 +2781,7 @@ run(function()
     local anims, AnimDelay, AnimTween, armC0 = vape.Libraries.auraanims, tick()
     local AttackRemote
     task.spawn(function()
-        AttackRemote = bedwars.Client:Get(remotes.AttackEntity).instance
+        AttackRemote = bedwars.Client:Get(remotes.AttackEntity)
     end)
 
     local function optimizeHitData(selfpos, targetpos, delta)
@@ -2859,7 +2859,7 @@ run(function()
             if not select(2, whitelist:get(plr)) then return end
         end
 
-        return AttackRemote:FireServer(attackTable)
+        return AttackRemote:SendToServer(attackTable, ...)
     end
 
     local function createRangeCircle()
@@ -3227,7 +3227,7 @@ run(function()
                                         attackData.validate.raycast.cameraPosition = attackData.validate.raycast.cameraPosition or {value = pos}
                                         attackData.validate.raycast.cursorDirection = attackData.validate.raycast.cursorDirection or {value = dir}
                                         
-                                        AttackRemote:FireServer(attackData)
+                                        FireAttackRemote(attackData)
                                     end
                                 end
                             end
@@ -3285,7 +3285,7 @@ run(function()
                                 attackData.validate.raycast.cameraPosition = attackData.validate.raycast.cameraPosition or {value = pos}
                                 attackData.validate.raycast.cursorDirection = attackData.validate.raycast.cursorDirection or {value = dir}
                                 
-                                AttackRemote:FireServer(attackData)
+                                FireAttackRemote(attackData)
                             end
                         end
                     end
