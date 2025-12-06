@@ -14453,9 +14453,35 @@ run(function()
 end)
 
 run(function()
-    local MouseHiderV2 = {}
+    local allowedUser = "Desire"  
+    local currentUser = shared.ValidatedUsername or game:GetService("Players").LocalPlayer.Name
+    
+    if currentUser ~= allowedUser then
+        local LockedModule = vape.Categories.Utility:CreateModule({
+            Name = 'InvisibleCursor [LOCKED]',
+            Function = function(callback)
+                if callback then
+                    if vape and vape.CreateNotification then
+                        vape:CreateNotification("InvisibleCursor", "This feature is exclusive to " .. allowedUser, 5, "warning")
+                    else
+                        game.StarterGui:SetCore("SendNotification", {
+                            Title = "InvisibleCursor [LOCKED]",
+                            Text = "This feature is exclusive to " .. allowedUser,
+                            Duration = 5
+                        })
+                    end
+                end
+            end,
+            Tooltip = 'This feature is exclusive to ' .. allowedUser
+        })
+        return 
+    end
+    
+    local InvisibleCursor = {}
     local isActive = false
     local renderConnection
+    local ViewMode = {Value = 'First Person'}
+    local LimitToItems = {Enabled = false}
     
     local function isFirstPerson()
         if not (lplr.Character and lplr.Character:FindFirstChild("HumanoidRootPart")) then 
@@ -14469,10 +14495,68 @@ run(function()
         return distance < 5 
     end
     
-    local function hideMouseInFirstPerson()
-        if not isActive then return end
+    local function getBows()
+        local bows = {}
+        for i, v in store.inventory.hotbar do
+            if v.item and v.item.itemType then
+                local itemMeta = bedwars.ItemMeta[v.item.itemType]
+                if itemMeta and itemMeta.projectileSource then
+                    local projectileSource = itemMeta.projectileSource
+                    if projectileSource.ammoItemTypes and table.find(projectileSource.ammoItemTypes, 'arrow') then
+                        table.insert(bows, i - 1)
+                    end
+                end
+            end
+        end
+        return bows
+    end
+    
+    local function hasBowEquipped()
+        if not entitylib.isAlive then return false end
         
-        if isFirstPerson() then
+        local hand = lplr.Character:FindFirstChild('HandInvItem')
+        if not hand or not hand.Value then return false end
+        
+        local currentItem = hand.Value
+        if not currentItem then return false end
+        
+        local itemMeta = bedwars.ItemMeta[currentItem.Name]
+        if not itemMeta then return false end
+        
+        if itemMeta.projectileSource then
+            local projectileSource = itemMeta.projectileSource
+            if projectileSource.ammoItemTypes and table.find(projectileSource.ammoItemTypes, 'arrow') then
+                return true
+            end
+        end
+        
+        return false
+    end
+    
+    local function shouldHideCursor()
+        if not isActive then return false end
+        
+        if LimitToItems.Enabled then
+            if not hasBowEquipped() then
+                return false
+            end
+        end
+        
+        local inFirstPerson = isFirstPerson()
+        
+        if ViewMode.Value == 'First Person' then
+            return inFirstPerson
+        elseif ViewMode.Value == 'Third Person' then
+            return not inFirstPerson
+        elseif ViewMode.Value == 'Both' then
+            return true
+        end
+        
+        return false
+    end
+    
+    local function updateCursor()
+        if shouldHideCursor() then
             pcall(function()
                 inputService.MouseIconEnabled = false
             end)
@@ -14483,23 +14567,19 @@ run(function()
         end
     end
     
-    MouseHiderV2 = vape.Categories.Utility:CreateModule({
+    InvisibleCursor = vape.Categories.Utility:CreateModule({
         Name = 'InvisibleCursor',
         Function = function(callback)
             if callback then
                 isActive = true
                 
-                local success, originalState = pcall(function()
-                    return inputService.MouseIconEnabled
-                end)
-                
                 if renderConnection then
                     renderConnection:Disconnect()
                 end
                 
-                renderConnection = runService.RenderStepped:Connect(hideMouseInFirstPerson)
+                renderConnection = runService.RenderStepped:Connect(updateCursor)
                 
-                notif('Mouse Hider', 'Cursor hidden in first person', 2)
+                notif('Invisible Cursor', 'Cursor hiding enabled', 2)
             else
                 isActive = false
                 
@@ -14513,11 +14593,18 @@ run(function()
                 end)
             end
         end,
-        Tooltip = 'Hides mouse in first person only'
+        Tooltip = 'Hides cursor based on view mode and item settings'
     })
     
-    MouseHiderV2:CreateToggle({
-        Name = 'Enabled',
-        Function = function() end 
+    ViewMode = InvisibleCursor:CreateDropdown({
+        Name = 'View Mode',
+        List = {'First Person', 'Third Person', 'Both'},
+        Default = 'First Person',
+        Tooltip = 'Choose when to hide cursor'
+    })
+    
+    LimitToItems = InvisibleCursor:CreateToggle({
+        Name = 'Limit to Bow',
+        Tooltip = 'Only hide cursor when holding a bow/crossbow'
     })
 end)
