@@ -3113,7 +3113,7 @@ run(function()
                                         },
                                         Player = plr.Player
                                     }
-                                })
+                                end)
                                 if not Attacking then
                                     Attacking = true
                                     store.KillauraTarget = v
@@ -3338,6 +3338,10 @@ run(function()
             table.insert(methods, i)
         end
     end
+    Sort = Killaura:CreateDropdown({
+        Name = 'Target Mode',
+        List = methods
+    })
     SwingRange = Killaura:CreateSlider({
         Name = 'Swing range',
         Min = 1,
@@ -3387,10 +3391,6 @@ run(function()
         Min = 1,
         Max = 5,
         Default = 5
-    })
-    Sort = Killaura:CreateDropdown({
-        Name = 'Target Mode',
-        List = methods
     })
     Mouse = Killaura:CreateToggle({Name = 'Require mouse down'})
     Swing = Killaura:CreateToggle({Name = 'No Swing'})
