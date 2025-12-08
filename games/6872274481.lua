@@ -2007,6 +2007,7 @@ run(function()
 	local Chance
 	local TargetCheck
 	local AirVelocity
+	local AirVelocityAmount
 	local AirHeight
 	local rand, old = Random.new()
 	local baseGroundY = nil
@@ -2051,8 +2052,8 @@ run(function()
 						local vertValue = Vertical.Value
 						
 						if AirVelocity.Enabled and isHighAboveBase() then
-							horizValue = 0
-							vertValue = 0
+							horizValue = AirVelocityAmount.Value
+							vertValue = AirVelocityAmount.Value
 						end
 						
 						if horizValue == 0 and vertValue == 0 then return end
@@ -2102,13 +2103,23 @@ run(function()
 	TargetCheck = Velocity:CreateToggle({Name = 'Only when targeting'})
 	AirVelocity = Velocity:CreateToggle({
 		Name = 'Air Velocity',
-		Tooltip = 'Takes full knockback when building high above your base position',
+		Tooltip = 'Custom knockback when building high above your base position',
 		Function = function(callback)
 			if callback and entitylib.isAlive then
 				baseGroundY = entitylib.character.RootPart.Position.Y
 			end
+			AirVelocityAmount.Object.Visible = callback
 		end
 	})
+	AirVelocityAmount = Velocity:CreateSlider({
+		Name = 'Air Amount',
+		Min = 0,
+		Max = 100,
+		Default = 0,
+		Suffix = '%',
+		Tooltip = 'Knockback percentage when in air (applies to both horizontal and vertical)'
+	})
+	AirVelocityAmount.Object.Visible = false
 	
 	Velocity:CreateButton({
 		Name = 'Reset Base Position',
