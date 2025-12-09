@@ -1951,16 +1951,82 @@ end)
 run(function()
 	local TriggerBot
 	local CPS
+	local ProjectileMode
+	local ProjectileFireRate
+	local ProjectileWaitDelay
+	local ProjectileFirstPerson
 	local rayParams = RaycastParams.new()
+	local lastProjectileShot = 0
+	local wasHoldingProjectile = false
+	
+	local VirtualInputManager = game:GetService("VirtualInputManager")
+	
+	local function leftClick()
+		local success = pcall(function()
+			VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+			task.wait(0.02)
+			VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+		end)
+		return success
+	end
+	
+	local function isFirstPerson()
+		return gameCamera.CFrame.Position.Magnitude - (gameCamera.Focus.Position).Magnitude < 1
+	end
+	
+	local function isHoldingProjectile()
+		if not entitylib.isAlive then return false end
+		
+		local currentSlot = store.inventory.hotbarSlot
+		local slotItem = store.inventory.hotbar[currentSlot + 1]
+		
+		if slotItem and slotItem.item and slotItem.item.itemType then
+			local itemMeta = bedwars.ItemMeta[slotItem.item.itemType]
+			if itemMeta and itemMeta.projectileSource then
+				local projectileSource = itemMeta.projectileSource
+				if projectileSource.ammoItemTypes and table.find(projectileSource.ammoItemTypes, 'arrow') then
+					return true
+				end
+			end
+		end
+		
+		return false
+	end
 	
 	TriggerBot = vape.Categories.Combat:CreateModule({
 		Name = 'TriggerBot',
 		Function = function(callback)
 			if callback then
 				repeat
-					local doAttack
-					if not bedwars.AppController:isLayerOpen(bedwars.UILayers.MAIN) then
-						if entitylib.isAlive and store.hand.toolType == 'sword' and bedwars.DaoController.chargingMaid == nil then
+					local doAttack = false
+					local holdingProjectile = isHoldingProjectile()
+					
+					if not bedwars.AppController:isLayerOpen(bedwars.UILayers.MAIN) and entitylib.isAlive then
+						-- Check if we're in projectile mode with a projectile weapon
+						if ProjectileMode.Enabled and holdingProjectile then
+							-- Check first person requirement
+							if ProjectileFirstPerson.Enabled and not isFirstPerson() then
+								wasHoldingProjectile = false
+							else
+								-- Handle initial shot with wait delay
+								if holdingProjectile and not wasHoldingProjectile then
+									task.wait(ProjectileWaitDelay.Value)
+									leftClick()
+									lastProjectileShot = tick()
+									wasHoldingProjectile = true
+								elseif holdingProjectile then
+									-- Rate-limited shots
+									local currentTime = tick()
+									if (currentTime - lastProjectileShot) >= ProjectileFireRate.Value then
+										leftClick()
+										lastProjectileShot = currentTime
+									end
+								else
+									wasHoldingProjectile = false
+								end
+							end
+						elseif store.hand.toolType == 'sword' and bedwars.DaoController.chargingMaid == nil then
+							-- Normal sword triggerbot
 							local attackRange = bedwars.ItemMeta[store.hand.tool.Name].sword.attackRange
 							rayParams.FilterDescendantsInstances = {lplr.Character}
 	
@@ -1982,21 +2048,100 @@ run(function()
 							if doAttack then
 								bedwars.SwordController:swingSwordAtMouse()
 							end
+						else
+							wasHoldingProjectile = false
 						end
 					end
 	
-					task.wait(doAttack and 1 / CPS.GetRandomValue() or 0.016)
+					task.wait(doAttack and not holdingProjectile and 1 / CPS.GetRandomValue() or 0.016)
 				until not TriggerBot.Enabled
 			end
 		end,
 		Tooltip = 'Automatically swings when hovering over a entity'
 	})
+	
 	CPS = TriggerBot:CreateTwoSlider({
 		Name = 'CPS',
 		Min = 1,
 		Max = 9,
 		DefaultMin = 7,
 		DefaultMax = 7
+	})
+	
+	ProjectileMode = TriggerBot:CreateToggle({
+		Name = 'Projectile Mode',
+		Tooltip = 'Auto-shoots crossbow/bow when holding projectile weapon'
+	})
+	
+	-- Projectile settings (only visible when ProjectileMode is enabled)
+	ProjectileFireRate = TriggerBot:CreateSlider({
+		Name = 'Projectile Fire Rate',
+		Min = 0.1,
+		Max = 3,
+		Default = 1.2,
+		Decimal = 10,
+		Suffix = function(val)
+			return val == 1 and 'second' or 'seconds'
+		end,
+		Tooltip = 'How fast to auto-fire (1.2 = every 1.2 seconds)',
+		Visible = function()
+			return ProjectileMode.Enabled
+		end
+	})
+	
+	ProjectileWaitDelay = TriggerBot:CreateSlider({
+		Name = 'Projectile Wait Delay',
+		Min = 0,
+		Max = 1,
+		Default = 0,
+		Decimal = 100,
+		Suffix = 's',
+		Tooltip = 'Delay before shooting (helps prevent ghosting)',
+		Visible = function()
+			return ProjectileMode.Enabled
+		end
+	})
+	
+	ProjectileFirstPerson = TriggerBot:CreateToggle({
+		Name = 'Projectile First Person Only',
+		Default = false,
+		Tooltip = 'Only works in first person mode',
+		Visible = function()
+			return ProjectileMode.Enabled
+		end
+	})
+end)
+
+run(function()
+	local ZoomUncapper
+	local ZoomAmount = {Value = 500}
+	local oldMaxZoom
+	
+	ZoomUncapper = vape.Categories.Render:CreateModule({
+		Name = 'ZoomUncapper',
+		Function = function(callback)
+			if callback then
+				oldMaxZoom = lplr.CameraMaxZoomDistance
+				lplr.CameraMaxZoomDistance = ZoomAmount.Value
+			else
+				if oldMaxZoom then
+					lplr.CameraMaxZoomDistance = oldMaxZoom
+				end
+			end
+		end,
+		Tooltip = 'Uncaps camera zoom distance'
+	})
+	
+	ZoomAmount = ZoomUncapper:CreateSlider({
+		Name = 'Zoom Distance',
+		Min = 20,
+		Max = 600,
+		Default = 100,
+		Function = function(val)
+			if ZoomUncapper.Enabled then
+				lplr.CameraMaxZoomDistance = val
+			end
+		end
 	})
 end)
 	
@@ -2007,7 +2152,6 @@ run(function()
 	local Chance
 	local TargetCheck
 	local AirVelocity
-	local AirVelocityAmount
 	local AirHeight
 	local rand, old = Random.new()
 	local baseGroundY = nil
@@ -2052,8 +2196,8 @@ run(function()
 						local vertValue = Vertical.Value
 						
 						if AirVelocity.Enabled and isHighAboveBase() then
-							horizValue = AirVelocityAmount.Value
-							vertValue = AirVelocityAmount.Value
+							horizValue = 0
+							vertValue = 0
 						end
 						
 						if horizValue == 0 and vertValue == 0 then return end
@@ -2103,23 +2247,13 @@ run(function()
 	TargetCheck = Velocity:CreateToggle({Name = 'Only when targeting'})
 	AirVelocity = Velocity:CreateToggle({
 		Name = 'Air Velocity',
-		Tooltip = 'Custom knockback when building high above your base position',
+		Tooltip = 'Takes full knockback when building high above your base position',
 		Function = function(callback)
 			if callback and entitylib.isAlive then
 				baseGroundY = entitylib.character.RootPart.Position.Y
 			end
-			AirVelocityAmount.Object.Visible = callback
 		end
 	})
-	AirVelocityAmount = Velocity:CreateSlider({
-		Name = 'Air Amount',
-		Min = 0,
-		Max = 100,
-		Default = 0,
-		Suffix = '%',
-		Tooltip = 'Knockback percentage when in air (applies to both horizontal and vertical)'
-	})
-	AirVelocityAmount.Object.Visible = false
 	
 	Velocity:CreateButton({
 		Name = 'Reset Base Position',
@@ -2130,6 +2264,77 @@ run(function()
 			end
 		end
 	})
+end)
+
+run(function()
+    local Antihit = {Enabled = false}
+    local Range, TimeUp, Down = 16, 0.5, 0.14
+
+    Antihit = vape.Categories.Blatant:CreateModule({
+        Name = "AntiHit",
+        Function = function(call) 
+            if call then
+                task.spawn(function()
+                    while Antihit.Enabled do
+                        local root = lplr.Character and lplr.Character:FindFirstChild("HumanoidRootPart")
+                        if root then
+                            local orgPos = root.Position
+                            local foundEnemy = false
+
+                            for _, v in next, playersService:GetPlayers() do
+                                if v ~= lplr and v.Team ~= lplr.Team then
+                                    local enemyChar = v.Character
+                                    local enemyRoot = enemyChar and enemyChar:FindFirstChild("HumanoidRootPart")
+                                    local enemyHum = enemyChar and enemyChar:FindFirstChild("Humanoid")
+                                    if enemyRoot and enemyHum and enemyHum.Health > 0 then
+                                        local dist = (root.Position - enemyRoot.Position).Magnitude
+                                        if dist <= Range.Value then
+                                            foundEnemy = true
+                                            break
+                                        end
+                                    end
+                                end
+                            end
+
+                            if foundEnemy then
+                                root.CFrame = CFrame.new(orgPos + Vector3.new(0, -230, 0))
+                                task.wait(TimeUp.Value)
+                                if Antihit.Enabled and lplr.Character and lplr.Character:FindFirstChild("HumanoidRootPart") then
+                                    lplr.Character.HumanoidRootPart.CFrame = CFrame.new(orgPos)
+                                end
+                            end
+                        end
+                        task.wait(Down.Value)
+                    end
+                end)
+            end
+        end,
+        Tooltip = "Prevents you from dying"
+    })
+
+    Range = Antihit:CreateSlider({
+        Name = "Range",
+        Min = 0,
+        Max = 50,
+        Default = 15,
+        Function = function(val) Range.Value = val end
+    })
+
+    TimeUp = Antihit:CreateSlider({
+        Name = "Time Up",
+        Min = 0,
+        Max = 1,
+        Default = 0.4,
+        Function = function(val) TimeUp.Value = val end
+    })
+
+    Down = Antihit:CreateSlider({
+        Name = "Time Down",
+        Min = 0,
+        Max = 1,
+        Default = 0.1,
+        Function = function(val) Down.Value = val end
+    })
 end)
 	
 local AntiFallDirection
@@ -2796,22 +3001,29 @@ run(function()
     local preserveSwordIcon = false
     local sigridcheck = false
 
-    local BLOCK_SIZE = 3 
-    local RAYCAST_SWORD_CHARACTER_DISTANCE = 4.8 * BLOCK_SIZE 
-    local REGION_SWORD_CHARACTER_DISTANCE = 4.2 * BLOCK_SIZE 
+    -- Enhanced position calculation based on decompiled constants
+    local BLOCK_SIZE = 3 -- From decompiled scripts
+    local RAYCAST_SWORD_CHARACTER_DISTANCE = 4.8 * BLOCK_SIZE -- 14.4 studs (from decompiled)
+    local REGION_SWORD_CHARACTER_DISTANCE = 4.2 * BLOCK_SIZE -- 12.6 studs (from decompiled)
     
+    -- Enhanced reach calculation function
     local function calculateExtendedReach(selfPos, targetPos, desiredRange)
         local distance = (selfPos - targetPos).Magnitude
         
+        -- If within normal reach, use normal position
         if distance <= RAYCAST_SWORD_CHARACTER_DISTANCE then
             return selfPos, targetPos
         end
         
+        -- If beyond max allowed but within desired range, calculate optimal position
         if distance > RAYCAST_SWORD_CHARACTER_DISTANCE and distance <= desiredRange then
             local direction = (targetPos - selfPos).Unit
             
+            -- Calculate position that makes the attack appear valid
+            -- Move self position closer to make distance appear within range
             local adjustedSelfPos = targetPos - (direction * RAYCAST_SWORD_CHARACTER_DISTANCE * 0.95)
             
+            -- Small random offset to avoid detection
             local randomOffset = Vector3.new(
                 math.random(-0.3, 0.3),
                 math.random(-0.1, 0.1),
@@ -2824,13 +3036,16 @@ run(function()
         return selfPos, targetPos
     end
     
+    -- Improved raycast simulation for better consistency
     local function simulateValidRaycast(selfPos, targetPos, direction)
+        -- Create realistic raycast data based on decompiled patterns
         local raycastData = {
             cameraPosition = {value = selfPos},
             cursorDirection = {value = direction},
             hit = nil
         }
         
+        -- Simulate a hit position slightly inside the target
         local hitOffset = direction * -0.5
         raycastData.hit = {
             position = {value = targetPos + hitOffset},
@@ -3085,6 +3300,7 @@ run(function()
                                 if actualRoot then
                                     local dir = CFrame.lookAt(selfpos, actualRoot.Position).LookVector
                                     
+                                    -- Use enhanced reach calculation for better consistency
                                     local adjustedSelfPos, adjustedTargetPos = calculateExtendedReach(selfpos, actualRoot.Position, AttackRange.Value)
                                     local pos = adjustedSelfPos
                                     
@@ -3099,6 +3315,7 @@ run(function()
 
                                     lastTargetTime = tick()
                                     
+                                    -- Create more realistic attack data based on decompiled patterns
                                     local attackData = {
                                         weapon = sword.tool,
                                         chargedAttack = {chargeRatio = 0},
@@ -3111,8 +3328,9 @@ run(function()
                                         }
                                     }
                                     
+                                    -- Add swing buffer multiplier from decompiled constants
                                     if not Swing.Enabled then
-                                        attackData.swingBufferMultiplier = 0.4
+                                        attackData.swingBufferMultiplier = 0.4 -- From decompiled SwordsConstants
                                     end
                                     
                                     AttackRemote:FireServer(attackData)
@@ -3216,7 +3434,7 @@ run(function()
     SwingRange = Killaura:CreateSlider({
         Name = 'Swing range',
         Min = 1,
-        Max = 40,
+        Max = 50, -- Increased for better targeting
         Default = 25,
         Suffix = function(val)
             return val == 1 and 'stud' or 'studs'
@@ -3226,7 +3444,7 @@ run(function()
     AttackRange = Killaura:CreateSlider({
         Name = 'Attack range',
         Min = 1,
-        Max = 28,
+        Max = 35, -- Max effective range with our enhanced calculation
         Default = 25,
         Suffix = function(val)
             return val == 1 and 'stud' or 'studs'
@@ -3237,7 +3455,7 @@ run(function()
         Name = 'Swing time',
         Min = 0,
         Max = 0.5,
-        Default = 0,
+        Default = 0.42,
         Decimal = 100
     })
 
@@ -3251,8 +3469,8 @@ run(function()
     UpdateRate = Killaura:CreateSlider({
         Name = 'Update rate',
         Min = 1,
-        Max = 180,
-        Default = 80, 
+        Max = 120,
+        Default = 80, -- Increased for smoother targeting
         Suffix = 'hz'
     })
 
@@ -4636,6 +4854,9 @@ run(function()
 	local UserInputService = game:GetService("UserInputService")
 	local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
+	local movementHistory = {}
+	local MAX_HISTORY = 10
+
 	local function updateOutline(target)
 		if targetOutline then
 			targetOutline:Destroy()
@@ -4684,6 +4905,7 @@ run(function()
 		end
 	end
 	
+	-- Enhanced prediction system combining aerov4bad's math with advanced movement prediction
 	local aeroprediction = {
 		SolveTrajectory = function(origin, projectileSpeed, gravity, targetPos, targetVelocity, playerGravity, playerHeight, playerJump, params)
 			local eps = 1e-9
@@ -4922,11 +5144,248 @@ run(function()
 		end
 	}
 	
+	-- Advanced movement prediction functions
+	local function predictStrafingMovement(targetPlayer, targetPart, projSpeed, gravity, origin, isBuildingUp)
+		if not targetPlayer or not targetPlayer.Character or not targetPart then 
+			return targetPart and targetPart.Position or Vector3.zero
+		end
+		
+		local currentPos = targetPart.Position
+		local currentVel = targetPart.Velocity
+		local distance = (currentPos - origin).Magnitude
+		
+		-- Store movement history for pattern detection
+		local playerKey = targetPlayer.Player and targetPlayer.Player.UserId or targetPlayer.Character.Name
+		if not movementHistory[playerKey] then
+			movementHistory[playerKey] = {}
+		end
+		
+		-- Add current position to history
+		table.insert(movementHistory[playerKey], {
+			position = currentPos,
+			velocity = currentVel,
+			time = tick()
+		})
+		
+		-- Keep only recent history
+		while #movementHistory[playerKey] > MAX_HISTORY do
+			table.remove(movementHistory[playerKey], 1)
+		end
+		
+		local baseTimeToTarget = distance / projSpeed
+		local velocityMagnitude = Vector3.new(currentVel.X, 0, currentVel.Z).Magnitude
+		local verticalVel = currentVel.Y
+		
+		-- Detect movement patterns
+		local isStrafing = velocityMagnitude > 8 and velocityMagnitude < 25
+		local isSprinting = velocityMagnitude >= 25
+		local isStandingStill = velocityMagnitude < 2
+		
+		-- Detect if player is building up (vertical movement)
+		local isBuilding = verticalVel > 5 or isBuildingUp
+		local history = movementHistory[playerKey]
+		local verticalMovementTrend = 0
+		
+		if #history >= 3 then
+			local recentVerticalChange = 0
+			for i = 2, #history do
+				recentVerticalChange = recentVerticalChange + (history[i].position.Y - history[i-1].position.Y)
+			end
+			verticalMovementTrend = recentVerticalChange / (#history - 1)
+			isBuilding = isBuilding or verticalMovementTrend > 1
+		end
+		
+		-- Time adjustment based on distance and movement pattern
+		local timeMultiplier = 1.0
+		if distance > 80 then
+			timeMultiplier = 0.95
+		elseif distance > 50 then
+			timeMultiplier = 0.98
+		elseif distance < 20 then
+			timeMultiplier = 1.08
+		end
+		
+		-- Adjust for movement patterns
+		if isStrafing then
+			timeMultiplier = timeMultiplier * 1.05
+		elseif isSprinting then
+			timeMultiplier = timeMultiplier * 1.08
+		elseif isStandingStill then
+			timeMultiplier = timeMultiplier * 0.98
+		end
+		
+		local timeToTarget = baseTimeToTarget * timeMultiplier
+		
+		-- Horizontal prediction strength based on movement pattern
+		local horizontalPredictionStrength = 0.80
+		if isBuilding then
+			horizontalPredictionStrength = 0.65
+			timeToTarget = timeToTarget * 1.12
+		elseif isStrafing then
+			horizontalPredictionStrength = 0.75
+		elseif isSprinting then
+			horizontalPredictionStrength = 0.70
+		elseif distance > 70 then
+			horizontalPredictionStrength = 0.70
+		elseif distance > 40 then
+			horizontalPredictionStrength = 0.75
+		elseif distance < 25 then
+			horizontalPredictionStrength = 0.88
+		end
+		
+		-- Strafe pattern detection and prediction
+		local predictedHorizontal = Vector3.zero
+		if #history >= 3 and isStrafing then
+			-- Detect strafe pattern (zig-zag, circle, etc.)
+			local avgDirection = Vector3.zero
+			for i = 2, #history do
+				local dir = (history[i].position - history[i-1].position) * Vector3.new(1, 0, 1)
+				if dir.Magnitude > 0 then
+					avgDirection = avgDirection + dir.Unit
+				end
+			end
+			avgDirection = avgDirection / (#history - 1)
+			
+			if avgDirection.Magnitude > 0.3 then
+				-- Predict based on average direction
+				predictedHorizontal = avgDirection.Unit * velocityMagnitude * timeToTarget * horizontalPredictionStrength
+			else
+				-- Random strafing, use current velocity
+				predictedHorizontal = Vector3.new(currentVel.X, 0, currentVel.Z) * timeToTarget * horizontalPredictionStrength
+			end
+		else
+			-- Standard prediction
+			local horizontalVel = Vector3.new(currentVel.X, 0, currentVel.Z)
+			predictedHorizontal = horizontalVel * timeToTarget * horizontalPredictionStrength
+		end
+		
+		-- Enhanced vertical prediction for building players
+		local verticalPrediction = 0
+		local isJumping = verticalVel > 10
+		local isFalling = verticalVel < -15
+		local isPeaking = math.abs(verticalVel) < 3 and verticalVel < 1
+		
+		if isBuilding then
+			-- Special handling for building players
+			local buildRate = 0
+			if #history >= 2 then
+				local recentBuild = 0
+				for i = 2, #history do
+					recentBuild = recentBuild + math.max(0, history[i].position.Y - history[i-1].position.Y)
+				end
+				buildRate = recentBuild / (#history - 1)
+			end
+			
+			if buildRate > 0.5 then
+				-- Actively building up
+				verticalPrediction = buildRate * timeToTarget * 2.5 + (verticalVel * timeToTarget * 0.4)
+			elseif isFalling then
+				verticalPrediction = verticalVel * timeToTarget * 0.35
+			elseif isJumping then
+				verticalPrediction = verticalVel * timeToTarget * 0.30
+			elseif isPeaking then
+				verticalPrediction = -2.5 * timeToTarget
+			else
+				verticalPrediction = verticalVel * timeToTarget * 0.28
+			end
+		else
+			-- Standard vertical prediction
+			if isFalling then
+				verticalPrediction = verticalVel * timeToTarget * 0.32
+			elseif isJumping then
+				verticalPrediction = verticalVel * timeToTarget * 0.28
+			elseif isPeaking then
+				verticalPrediction = -2 * timeToTarget
+			else
+				verticalPrediction = verticalVel * timeToTarget * 0.25
+			end
+		end
+		
+		-- Apply block placement prediction (if player is building)
+		local blockPlacementOffset = Vector3.zero
+		if isBuilding then
+			-- Predict where blocks might be placed
+			local lookDirection = targetPart.CFrame.LookVector
+			blockPlacementOffset = lookDirection * 3 * (timeToTarget / 0.5)
+		end
+		
+		local finalPosition = currentPos + predictedHorizontal + Vector3.new(0, verticalPrediction, 0) + blockPlacementOffset
+		
+		-- Raycast to ensure prediction doesn't go through blocks
+		local raycastResult = workspace:Raycast(currentPos, (finalPosition - currentPos), rayCheck)
+		if raycastResult and raycastResult.Position then
+			finalPosition = raycastResult.Position + Vector3.new(0, playerHeight, 0)
+		end
+		
+		return finalPosition
+	end
+	
+	local function smoothAim(currentCFrame, targetPosition, distance, isBuilding)
+		local smoothnessFactor = 0.85
+		
+		if isBuilding then
+			smoothnessFactor = 0.92 -- Slower smoothness for building players
+		elseif distance > 70 then
+			smoothnessFactor = 0.75
+		elseif distance > 40 then
+			smoothnessFactor = 0.80
+		elseif distance < 20 then
+			smoothnessFactor = 0.92
+		end
+		
+		return currentCFrame:Lerp(CFrame.new(currentCFrame.Position, targetPosition), smoothnessFactor)
+	end
+	
+	local function detectBuildingUp(targetPlayer)
+		if not targetPlayer or not targetPlayer.Character then return false end
+		
+		local playerKey = targetPlayer.Player and targetPlayer.Player.UserId or targetPlayer.Character.Name
+		local history = movementHistory[playerKey]
+		
+		if not history or #history < 3 then return false end
+		
+		-- Check if player is consistently moving upward
+		local verticalChanges = {}
+		for i = 2, #history do
+			table.insert(verticalChanges, history[i].position.Y - history[i-1].position.Y)
+		end
+		
+		local positiveChanges = 0
+		local totalVerticalChange = 0
+		for _, change in ipairs(verticalChanges) do
+			totalVerticalChange = totalVerticalChange + change
+			if change > 0.1 then
+				positiveChanges = positiveChanges + 1
+			end
+		end
+		
+		local avgVerticalChange = totalVerticalChange / #verticalChanges
+		local isBuildingUp = positiveChanges >= #verticalChanges * 0.7 and avgVerticalChange > 0.5
+		
+		-- Check if player has blocks in inventory (likely to build)
+		local hasBlocks = false
+		if targetPlayer.Player then
+			local inv = bedwars.getInventory(targetPlayer.Player)
+			if inv then
+				for _, item in pairs(inv.items or {}) do
+					local itemMeta = bedwars.ItemMeta[item.itemType]
+					if itemMeta and itemMeta.block then
+						hasBlocks = true
+						break
+					end
+				end
+			end
+		end
+		
+		return isBuildingUp or hasBlocks
+	end
+	
 	local AeroPA = vape.Categories.Blatant:CreateModule({
 		Name = 'AeroPA',
 		Function = function(callback)
 			if callback then
 				handlePlayerSelection()
+				table.clear(movementHistory)
 				
 				old = bedwars.ProjectileController.calculateImportantLaunchValues
 				bedwars.ProjectileController.calculateImportantLaunchValues = function(...)
@@ -4991,51 +5450,68 @@ run(function()
 							end
 						end
 
-						if store.hand and store.hand.tool then
-							if store.hand.tool.Name:find("spellbook") then
-								local targetPos = plr.RootPart.Position
-								local selfPos = lplr.Character.PrimaryPart.Position
-								local expectedTime = (selfPos - targetPos).Magnitude / 160
-								targetPos = targetPos + (plr.RootPart.Velocity * expectedTime)
-								return {
-									initialVelocity = (targetPos - selfPos).Unit * 160,
-									positionFrom = offsetpos,
-									deltaT = 2,
-									gravitationalAcceleration = 1,
-									drawDurationSeconds = 5
-								}
-							elseif store.hand.tool.Name:find("chakram") then
-								local targetPos = plr.RootPart.Position
-								local selfPos = lplr.Character.PrimaryPart.Position
-								local expectedTime = (selfPos - targetPos).Magnitude / 80
-								targetPos = targetPos + (plr.RootPart.Velocity * expectedTime)
-								return {
-									initialVelocity = (targetPos - selfPos).Unit * 80,
-									positionFrom = offsetpos,
-									deltaT = 2,
-									gravitationalAcceleration = 1,
-									drawDurationSeconds = 5
-								}
-							end
-						end
-	
-						local newlook = CFrame.new(offsetpos, plr[TargetPart.Value].Position) * CFrame.new(projmeta.projectile == 'owl_projectile' and Vector3.zero or Vector3.new(bedwars.BowConstantsTable.RelX, bedwars.BowConstantsTable.RelY, bedwars.BowConstantsTable.RelZ))
+						-- Check if player is building up
+						local isBuildingUp = detectBuildingUp(plr)
 						
+						-- Enhanced prediction for building players
+						local predictedPosition = predictStrafingMovement(
+							plr, 
+							plr[TargetPart.Value], 
+							projSpeed, 
+							gravity,
+							offsetpos,
+							isBuildingUp
+						)
+						
+						local rawLook = CFrame.new(offsetpos, plr[TargetPart.Value].Position)
+						local distance = (plr[TargetPart.Value].Position - offsetpos).Magnitude
+						
+						-- Smooth aiming with building detection
+						local newlook = smoothAim(rawLook, predictedPosition, distance, isBuildingUp)
+
+						if projmeta.projectile ~= 'owl_projectile' then
+							newlook = newlook * CFrame.new(
+								bedwars.BowConstantsTable.RelX or 0,
+								bedwars.BowConstantsTable.RelY or 0,
+								bedwars.BowConstantsTable.RelZ or 0
+							)
+						end
+
 						local targetVelocity = projmeta.projectile == 'telepearl' and Vector3.zero or plr[TargetPart.Value].Velocity
-						local calc = aeroprediction.SolveTrajectory(newlook.p, projSpeed, gravity, plr[TargetPart.Value].Position, targetVelocity, playerGravity, plr.HipHeight, plr.Jumping and 50 or nil, rayCheck)
+						
+						-- Use enhanced prediction with building detection
+						local calc = aeroprediction.SolveTrajectory(
+							newlook.p, 
+							projSpeed, 
+							gravity, 
+							predictedPosition, 
+							targetVelocity, 
+							playerGravity, 
+							plr.HipHeight, 
+							plr.Jumping and 50 or nil,
+							rayCheck
+						)
 						
 						if calc then
-							if targetinfo and targetinfo.Targets then
-								targetinfo.Targets[plr] = tick() + 1
+							local finalDirection = (calc - newlook.p).Unit
+							local angleFromHorizontal = math.acos(math.clamp(finalDirection:Dot(Vector3.new(0, 1, 0)), -1, 1))
+							
+							local minAngle = math.rad(1)
+							local maxAngle = math.rad(179)
+							
+							if angleFromHorizontal > minAngle and angleFromHorizontal < maxAngle then
+								if targetinfo and targetinfo.Targets then
+									targetinfo.Targets[plr] = tick() + 1
+								end
+								hovering = false
+								return {
+									initialVelocity = finalDirection * projSpeed,
+									positionFrom = offsetpos,
+									deltaT = lifetime,
+									gravitationalAcceleration = gravity,
+									drawDurationSeconds = 5
+								}
 							end
-							hovering = false
-							return {
-								initialVelocity = CFrame.new(newlook.Position, calc).LookVector * projSpeed,
-								positionFrom = offsetpos,
-								deltaT = lifetime,
-								gravitationalAcceleration = gravity,
-								drawDurationSeconds = 5
-							}
 						end
 					end
 	
@@ -5049,22 +5525,24 @@ run(function()
 					targetOutline = nil
 				end
 				selectedTarget = nil
+				table.clear(movementHistory)
 				for i,v in pairs(CoreConnections) do
 					pcall(function() v:Disconnect() end)
 				end
 				table.clear(CoreConnections)
 			end
 		end,
-		Tooltip = 'Silently adjusts your aim towards the enemy. Click a player to lock onto them (red outline).'
+		Tooltip = 'Silently adjusts your aim towards the enemy. Click a player to lock onto them (red outline). Enhanced prediction for building and strafing players.'
 	})
 	
 	Targets = AeroPA:CreateTargets({
 		Players = true,
-		Walls = true
+		Walls = true,
+		NPCs = false
 	})
 	TargetPart = AeroPA:CreateDropdown({
 		Name = 'Part',
-		List = {'RootPart', 'Head'}
+		List = {'RootPart', 'Head', 'HumanoidRootPart'}
 	})
 	FOV = AeroPA:CreateSlider({
 		Name = 'FOV',
@@ -5095,7 +5573,8 @@ run(function()
 	Blacklist = AeroPA:CreateTextList({
 		Name = 'Blacklist',
 		Darker = true,
-		Default = {'telepearl'}
+		Default = {'telepearl'},
+		Visible = true
 	})
 end)
 
@@ -7020,150 +7499,6 @@ run(function()
 			end
 		end,
 		Darker = true
-	})
-end)
-
-run(function()
-	local WhitelistChecker
-	local cachedData = {}
-	local lastCheck = 0
-	local checkInterval = 35
-	
-	local function fetchAPI(url)
-		local success, result = pcall(function()
-			return game:HttpGet(url, true)
-		end)
-		if success then
-			return httpService:JSONDecode(result)
-		end
-		return nil
-	end
-	
-	local function getUserHash(userId)
-		-- lowkey this needs to match the hashing algorithm used by the api/scripts n shit BUT i dont have the exact algorithm so ill use userId to directly check :D
-		return tostring(userId)
-	end
-	
-	local function checkPlayer(player, data)
-		local userId = tostring(player.UserId)
-		local foundIn = {}
-		
-		-- checking vw moon and qp shit
-		for scriptName, scriptData in pairs(data) do
-			if scriptName ~= "default" then
-				for hash, info in pairs(scriptData) do
-					if hash == userId or (info.names and table.find(info.names, player.Name)) then
-						table.insert(foundIn, {
-							script = scriptName,
-							level = info.level or info.attackable or "N/A",
-							tag = info.names and info.names[1] and info.names[1].text or "N/A",
-							attackable = info.attackable ~= nil and (info.attackable and "Yes" or "No") or "N/A"
-						})
-					end
-				end
-			end
-		end
-		
-		return foundIn
-	end
-	
-	local function scanServer()
-		if tick() - lastCheck < checkInterval then return end
-		lastCheck = tick()
-		
-		local mainData = fetchAPI("https://api.love-skidding.lol/fetchcheaters")
-		local vapeData = fetchAPI("https://whitelist.vapevoidware.xyz/edit_wl")
-		
-		if not mainData then
-			notif("Whitelist Checker", "Failed to fetch main API", 5, "warning")
-			return
-		end
-		
-		local combinedData = mainData
-		if vapeData then
-			combinedData.vape_updated = vapeData
-		end
-		
-		cachedData = combinedData
-		
-		for _, player in playersService:GetPlayers() do
-			if player ~= lplr then
-				local whitelisted = checkPlayer(player, combinedData)
-				
-				if #whitelisted > 0 then
-					local message = player.Name .. " is whitelisted in:\n"
-					for _, info in whitelisted do
-						message = message .. string.format(
-							"• %s | Level: %s | Tag: %s | Attackable: %s\n",
-							info.script:upper(),
-							tostring(info.level),
-							info.tag,
-							info.attackable
-						)
-					end
-					notif("Whitelist Checker", message, 10, "info")
-				end
-			end
-		end
-	end
-	
-	WhitelistChecker = vape.Categories.Utility:CreateModule({
-		Name = "Whitelist Checker",
-		Function = function(callback)
-			if callback then
-				task.spawn(scanServer)
-				
-				WhitelistChecker:Clean(playersService.PlayerAdded:Connect(function(player)
-					task.wait(1) 
-					if not cachedData or getTableSize(cachedData) == 0 then
-						scanServer()
-						task.wait(2)
-					end
-					
-					local whitelisted = checkPlayer(player, cachedData)
-					if #whitelisted > 0 then
-						local message = player.Name .. " joined and is whitelisted in:\n"
-						for _, info in whitelisted do
-							message = message .. string.format(
-								"• %s | Level: %s | Tag: %s | Attackable: %s\n",
-								info.script:upper(),
-								tostring(info.level),
-								info.tag,
-								info.attackable
-							)
-						end
-						notif("Whitelist Checker", message, 10, "warning")
-					end
-				end))
-				
-				repeat
-					scanServer()
-					task.wait(checkInterval)
-				until not WhitelistChecker.Enabled
-			else
-				lastCheck = 0
-				table.clear(cachedData)
-			end
-		end,
-		Tooltip = "Checks if players in your server are whitelisted in Vape/Voidware/QP/Velocity"
-	})
-	
-	WhitelistChecker:CreateToggle({
-		Name = "Notify on Join",
-		Default = true,
-		Tooltip = "Notify immediately when a whitelisted player joins"
-	})
-	
-	WhitelistChecker:CreateToggle({
-		Name = "Show Level",
-		Default = true,
-		Tooltip = "Show the whitelist level in notifications"
-	})
-	
-	WhitelistChecker:CreateToggle({
-		Name = "Show Tags",
-		Default = true,
-		Tooltip = "Show custom tags in notifications"
 	})
 end)
 	
@@ -9328,7 +9663,7 @@ run(function()
 	end
 	
 	StaffDetector = vape.Categories.Utility:CreateModule({
-		Name = 'Staff Detector',
+		Name = 'StaffDetector',
 		Function = function(callback)
 			if callback then
 				StaffDetector:Clean(playersService.PlayerAdded:Connect(playerAdded))
@@ -9367,13 +9702,6 @@ run(function()
 		Name = 'Users',
 		Placeholder = 'player (userid)'
 	})
-	
-	task.spawn(function()
-		repeat task.wait(1) until vape.Loaded or vape.Loaded == nil
-		if vape.Loaded and not StaffDetector.Enabled then
-			StaffDetector:Toggle()
-		end
-	end)
 end)
 	
 run(function()
@@ -11928,6 +12256,7 @@ run(function()
 	local SelfBreak
 	local InstantBreak
 	local LimitItem
+	local MouseDown
 	local customlist, parts = {}, {}
 	
 	local function customHealthbar(self, blockRef, health, maxHealth, changeHealth, block)
@@ -12034,6 +12363,12 @@ run(function()
 	
 	local function attemptBreak(tab, localPosition)
 		if not tab then return end
+		
+		-- Check if Mouse Down toggle is enabled and mouse is not pressed
+		if MouseDown.Enabled and not inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+			return false
+		end
+		
 		for _, v in tab do
 			if (v.Position - localPosition).Magnitude < Range.Value and bedwars.BlockController:isBlockBreakable({blockPosition = v.Position / 3}, lplr) then
 				if not SelfBreak.Enabled and v:GetAttribute('PlacedByUserId') == lplr.UserId then continue end
@@ -12186,6 +12521,10 @@ run(function()
 	LimitItem = Breaker:CreateToggle({
 		Name = 'Limit to items',
 		Tooltip = 'Only breaks when tools are held'
+	})
+	MouseDown = Breaker:CreateToggle({
+		Name = 'Require Mouse Down',
+		Tooltip = 'Only breaks blocks when holding left click'
 	})
 end)
 	
@@ -14462,87 +14801,4 @@ run(function()
             updateCursor()
         end)
     end
-end)
-
-run(function()
-    local TaxDisabler = vape.Categories.Blatant:CreateModule({
-        Name = 'Tax Disabler',
-        Function = function(callback)
-            if callback then
-                local oldRemote
-                local suc, res = pcall(function()
-                    local Client = require(replicatedStorage.TS.remotes).default.Client
-                    oldRemote = Client:Get("UpdateShopTaxState")
-                    
-                    Client:Get("UpdateShopTaxState"):Connect(function(taxData)
-                        local modifiedTaxData = {
-                            taxState = false, 
-                            addedTax = {} 
-                        }
-                        
-                        if bedwars.Store then
-                            bedwars.Store:dispatch({
-                                type = "IncrementTaxState",
-                                taxData = modifiedTaxData
-                            })
-                        end
-                    end)
-                end)
-                
-                if not suc then
-                    notif('Tax Disabler', 'Failed to hook into tax system', 5, 'alert')
-                    TaxDisabler:Toggle()
-                end
-                
-                store.TaxDisablerOldRemote = oldRemote
-                
-            else
-                if store.TaxDisablerOldRemote then
-                    pcall(function()
-                        local Client = require(replicatedStorage.TS.remotes).default.Client
-                        Client:Get("UpdateShopTaxState"):Destroy()
-                        -- note to self: in practice we cant easily restore the original remote
-                        -- the connection will be cleared when we re enable the module
-                    end)
-                    store.TaxDisablerOldRemote = nil
-                end
-            end
-        end,
-        Tooltip = 'Prevents shop tax from being applied\nwhen taking items from teammates.'
-    })
-
-    -- alternative approach using knit controller
-    local function hookIntoKnitController()
-        local suc, Knit = pcall(function()
-            return debug.getupvalue(require(lplr.PlayerScripts.TS.knit).setup, 9)
-        end)
-        
-        if suc and Knit then
-            for _, controller in pairs(Knit.Controllers) do
-                if controller.Name == "ShopTaxController" then
-                    local oldKnitStart = controller.KnitStart
-                    controller.KnitStart = function(self, ...)
-                        local result = oldKnitStart(self, ...)
-                        
-                        self.taxStateUpdateEvent:Connect(function(taxData)
-                            self.hasTax = false
-                            self.addedTaxMap = {}
-                            self.taxedItems = {}
-                            
-                            if bedwars.Store then
-                                bedwars.Store:dispatch({
-                                    type = "IncrementTaxState"
-                                })
-                            end
-                        end)
-                        
-                        return result
-                    end
-                    break
-                end
-            end
-        end
-    end
-
-    task.spawn(hookIntoKnitController)
 end)
