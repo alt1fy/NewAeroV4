@@ -1,7 +1,3 @@
---[[
-	Prediction Library
-	Source: https://devforum.roblox.com/t/predict-projectile-ballistics-including-gravity-and-motion/1842434
-]]
 local module = {}
 local eps = 1e-9
 local function isZero(d)
@@ -26,7 +22,7 @@ local function solveQuadric(c0, c1, c2)
 		return s0
 	elseif (D < 0) then
 		return
-	else -- if (D > 0)
+	else 
 		local sqrt_D = math.sqrt(D)
 
 		s0 = sqrt_D - p
@@ -55,16 +51,16 @@ local function solveCubic(c0, c1, c2, c3)
 	D = q * q + cb_p
 
 	if isZero(D) then
-		if isZero(q) then -- one triple solution
+		if isZero(q) then
 			s0 = 0
 			num = 1
-		else -- one single and one double solution
+		else 
 			local u = cuberoot(-q)
 			s0 = 2 * u
 			s1 = -u
 			num = 2
 		end
-	elseif (D < 0) then -- Casus irreducibilis: three real solutions
+	elseif (D < 0) then
 		local phi = (1 / 3) * math.acos(-q / math.sqrt(-cb_p))
 		local t = 2 * math.sqrt(-p)
 
@@ -72,7 +68,7 @@ local function solveCubic(c0, c1, c2, c3)
 		s1 = -t * math.cos(phi + math.pi / 3)
 		s2 = -t * math.cos(phi - math.pi / 3)
 		num = 3
-	else -- one real solution
+	else 
 		local sqrt_D = math.sqrt(D)
 		local u = cuberoot(sqrt_D - q)
 		local v = -cuberoot(sqrt_D + q)
@@ -186,62 +182,134 @@ function module.solveQuartic(c0, c1, c2, c3, c4)
 	return {s3, s2, s1, s0}
 end
 
-function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, targetVelocity, playerGravity, playerHeight, playerJump, params)
-	local disp = targetPos - origin
-	local p, q, r = targetVelocity.X, targetVelocity.Y, targetVelocity.Z
-	local h, j, k = disp.X, disp.Y, disp.Z
-	local l = -.5 * gravity
-	--attemped gravity calculation, may return to it in the future.
-	if math.abs(q) > 0.01 and playerGravity and playerGravity > 0 then
-		local estTime = (disp.Magnitude / projectileSpeed)
-		local origq = q
-		local origj = j
-		for i = 1, 100 do
-			q -= (.5 * playerGravity) * estTime
-			local velo = targetVelocity * 0.016
-			local ray = workspace.Raycast(workspace, Vector3.new(targetPos.X, targetPos.Y, targetPos.Z), Vector3.new(velo.X, (q * estTime) - playerHeight, velo.Z), params)
-			if ray then
-				local newTarget = ray.Position + Vector3.new(0, playerHeight, 0)
-				estTime -= math.sqrt(((targetPos - newTarget).Magnitude * 2) / playerGravity)
-				targetPos = newTarget
-				j = (targetPos - origin).Y
-				q = 0
-				break
-			else
-				break
-			end
-		end
-	end
+function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, targetVelocity, playerGravity, playerHeight, playerJump, params, walking, ping)
+    ping = ping or 0
+    local pingCompensation = ping * 60 
+    targetPos = targetPos + (targetVelocity * pingCompensation)
+    
+    local disp = targetPos - origin
+    local p, q, r = targetVelocity.X, targetVelocity.Y, targetVelocity.Z
+    local h, j, k = disp.X, disp.Y, disp.Z
+    local l = -0.5 * gravity
 
-	local solutions = module.solveQuartic(
-		l*l,
-		-2*q*l,
-		q*q - 2*j*l - projectileSpeed*projectileSpeed + p*p + r*r,
-		2*j*q + 2*h*p + 2*k*r,
-		j*j + h*h + k*k
-	)
-	if solutions then
-		local posRoots = table.create(2)
-		for _, v in solutions do --filter out the negative roots
-			if v > 0 then
-				table.insert(posRoots, v)
-			end
-		end
-		posRoots[1] = posRoots[1]
-		if posRoots[1] then
-			local t = posRoots[1]
-			local d = (h + p*t)/t
-			local e = (j + q*t - l*t*t)/t
-			local f = (k + r*t)/t
-			return origin + Vector3.new(d, e, f)
-		end
-	elseif gravity == 0 then
-		local t = (disp.Magnitude / projectileSpeed)
-		local d = (h + p*t)/t
-		local e = (j + q*t - l*t*t)/t
-		local f = (k + r*t)/t
-		return origin + Vector3.new(d, e, f)
-	end
+    if walking then
+        local walkSpeedMultiplier = 0.85 
+        p = p * walkSpeedMultiplier
+        r = r * walkSpeedMultiplier
+    end
+    
+    if playerJump and playerJump > 0 then
+        local timeSinceJump = 0 
+        q = math.max(q, playerJump * (1 - timeSinceJump * 0.5))
+    end
+    
+    if math.abs(q) > 0.01 and playerGravity and playerGravity > 0 then
+        local estTime = (disp.Magnitude / projectileSpeed)
+        for _ = 1, 50 do 
+            q -= (0.5 * playerGravity) * estTime
+            
+            local airTime = estTime * 0.8
+            local verticalVel = q - (playerGravity * airTime)
+            
+            local ray = workspace:Raycast(
+                targetPos,
+                Vector3.new(p * estTime, (verticalVel * estTime) - playerHeight, r * estTime),
+                params
+            )
+            
+            if ray then
+                local newTarget = ray.Position + Vector3.new(0, playerHeight, 0)
+                local heightDiff = math.abs(targetPos.Y - newTarget.Y)
+                estTime = estTime - math.sqrt((heightDiff * 2) / playerGravity)
+                targetPos = newTarget
+                j = (targetPos - origin).Y
+                q = 0 
+                break
+            else
+                break
+            end
+        end
+    end
+
+    local solutions = module.solveQuartic(
+        l*l,
+        -2*q*l,
+        q*q - 2*j*l - projectileSpeed*projectileSpeed + p*p + r*r,
+        2*j*q + 2*h*p + 2*k*r,
+        j*j + h*h + k*k
+    )
+
+    if solutions then
+        local bestT
+        for _, t in solutions do
+            if t and t > 0 then
+                local idealTime = disp.Magnitude / projectileSpeed
+                if not bestT or math.abs(t - idealTime) < math.abs(bestT - idealTime) then
+                    bestT = t
+                end
+            end
+        end
+
+        if bestT then
+            local futurePos = targetPos + targetVelocity * bestT
+            local verticalMovement = 0
+            
+            if playerGravity and playerGravity > 0 then
+                verticalMovement = -0.5 * playerGravity * bestT * bestT
+                futurePos = futurePos + Vector3.new(0, verticalMovement, 0)
+            end
+            
+            if walking then
+                local accelerationFactor = 0.9 + (0.1 * math.sin(bestT * 5)) 
+                futurePos = targetPos + (targetVelocity * bestT * accelerationFactor)
+            end
+
+            local disp2 = futurePos - origin
+            local h2, j2, k2 = disp2.X, (futurePos - origin).Y, disp2.Z
+
+            local d = h2 / bestT
+            local e = (j2 - l*bestT*bestT) / bestT
+            local f = k2 / bestT
+
+            local resultPos = origin + Vector3.new(d, e, f)
+            
+            if params then
+                local finalCheck = workspace:Raycast(origin, resultPos - origin, params)
+                if finalCheck then
+                    resultPos = finalCheck.Position - ((resultPos - origin).Unit * 2)
+                end
+            end
+            
+            return resultPos
+        end
+    elseif gravity == 0 then
+        local t = (disp.Magnitude / projectileSpeed)
+        
+        t = t + ping
+        
+        local futurePos = targetPos + targetVelocity * t
+        local disp2 = futurePos - origin
+        
+        local d = disp2.X / t
+        local e = (futurePos - origin).Y / t
+        local f = disp2.Z / t
+        
+        return origin + Vector3.new(d, e, f)
+    end
+    
+    local fallbackTime = disp.Magnitude / projectileSpeed
+    local fallbackPos = targetPos + targetVelocity * fallbackTime
+    return fallbackPos
+end
+
+function module.PredictBowShot(origin, speed, targetPos, targetVel, playerHeight, ping)
+    ping = ping or 0
+    local compensatedTime = (targetPos - origin).Magnitude / speed + ping
+    
+    local futurePos = targetPos + (targetVel * compensatedTime)
+    local verticalAdjustment = Vector3.new(0, playerHeight * 0.7, 0) -- Aim slightly above center
+    
+    return futurePos + verticalAdjustment
 end
 
 return module
