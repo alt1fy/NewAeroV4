@@ -1,8 +1,3 @@
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local mainapi = {
 	Categories = {},
 	GUIColor = {
@@ -5278,32 +5273,31 @@ end
 
 function mainapi:CreateNotification(title, text, duration, type, custom, customsize)
 	if not self.Notifications.Enabled then return end
-	if getgenv().closet then return end  
-    task.delay(0, function()
-        local rescaled = 1
-        if self.ThreadFix then
-            setthreadidentity(8)
-        end
+	if getgenv().closet then return end
+	task.delay(0, function()		
+		local rescaled = 1
+		if self.ThreadFix then
+			setthreadidentity(8)
+		end
 		local i = #notifications:GetChildren() + 1
-        
-        local notification = Instance.new('ImageLabel')
-        notification.Name = 'Notification'
-        notification.Size = UDim2.fromOffset(math.max(getfontsize(removeTags(text), 14 * rescaled, uipallet.Font).X + 80, 266) * rescaled, 75 * rescaled)
-        notification.Position = UDim2.new(1, 0, 1, -(29 + (78 * i)))
-        notification.ZIndex = 5 
-        notification.BackgroundTransparency = 1
-        notification.Image = getcustomasset('newvape/assets/new/notification.png')
-        notification.ScaleType = Enum.ScaleType.Slice
-        notification.SliceCenter = Rect.new(7, 7, 9, 9)
-        notification.Parent = notifications
+		local notification = Instance.new('ImageLabel')
+		notification.Name = 'Notification'
+		notification.Size = UDim2.fromOffset(math.max(getfontsize(removeTags(text), 14 * rescaled, uipallet.Font).X + 80, 266) * rescaled, 75 * rescaled)
+		notification.Position = UDim2.new(1, 0, 1, -(29 + (78 * i)))
+		notification.ZIndex = 5
+		notification.BackgroundTransparency = 1
+		notification.Image = getcustomasset('newvape/assets/new/notification.png')
+		notification.ScaleType = Enum.ScaleType.Slice
+		notification.SliceCenter = Rect.new(7, 7, 9, 9)
+		notification.Parent = notifications
 		addBlur(notification, true)
 		local iconshadow = Instance.new('ImageLabel')
 		iconshadow.Name = 'Icon'
-		iconshadow.Size = UDim2.fromOffset(60, 60)
+		iconshadow.Size = custom and customsize or UDim2.fromOffset(60 * rescaled, 60 * rescaled)
 		iconshadow.Position = UDim2.fromOffset(-5, -8)
 		iconshadow.ZIndex = 5
 		iconshadow.BackgroundTransparency = 1
-		iconshadow.Image = getcustomasset('newvape/assets/new/'..(type or 'info')..'.png')
+		iconshadow.Image = custom and type or getcustomasset('newvape/assets/new/'..(type or 'info')..'.png')
 		iconshadow.ImageColor3 = Color3.new()
 		iconshadow.ImageTransparency = 0.5
 		iconshadow.Parent = notification
@@ -5314,15 +5308,15 @@ function mainapi:CreateNotification(title, text, duration, type, custom, customs
 		icon.Parent = iconshadow
 		local titlelabel = Instance.new('TextLabel')
 		titlelabel.Name = 'Title'
-		titlelabel.Size = UDim2.new(1, -56, 0, 20)
+		titlelabel.Size = UDim2.new(1 * rescaled, -56 * rescaled, 0, 20 * rescaled)
 		titlelabel.Position = UDim2.fromOffset(46, 16)
 		titlelabel.ZIndex = 5
 		titlelabel.BackgroundTransparency = 1
-		titlelabel.Text = "<stroke color='#FFFFFF' joins='round' thickness='0.3' transparency='0.5'>"..title..'</stroke>'
+		titlelabel.Text = "<stroke color='#FFFFFF' joins='round' thickness='0.3' transparency='0.5'>"..(title)..'</stroke>'
 		titlelabel.TextXAlignment = Enum.TextXAlignment.Left
 		titlelabel.TextYAlignment = Enum.TextYAlignment.Top
 		titlelabel.TextColor3 = Color3.fromRGB(209, 209, 209)
-		titlelabel.TextSize = 14
+		titlelabel.TextSize = 14 * rescaled
 		titlelabel.RichText = true
 		titlelabel.FontFace = uipallet.FontSemiBold
 		titlelabel.Parent = notification
@@ -5344,7 +5338,7 @@ function mainapi:CreateNotification(title, text, duration, type, custom, customs
 		textlabel.Parent = textshadow
 		local progress = Instance.new('Frame')
 		progress.Name = 'Progress'
-		progress.Size = UDim2.new(1, -13, 0, 2)
+		progress.Size = UDim2.new(1 * rescaled, -13 * rescaled, 0, 2 * rescaled)
 		progress.Position = UDim2.new(0, 3, 1, -4)
 		progress.ZIndex = 5
 		progress.BackgroundColor3 =
@@ -5364,7 +5358,7 @@ function mainapi:CreateNotification(title, text, duration, type, custom, customs
 		task.delay(duration, function()
 			if tween.Tween then
 				tween:Tween(notification, TweenInfo.new(0.4, Enum.EasingStyle.Exponential), {
-					AnchorPoint = Vector2.new(1, 0)  
+					AnchorPoint = Vector2.new(0, 0)
 				}, tween.tweenstwo)
 			end
 			task.wait(0.2)
