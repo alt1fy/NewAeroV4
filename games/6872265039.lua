@@ -1,5 +1,6 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local run = function(func) func() end
 local cloneref = cloneref or function(obj) return obj end
 
@@ -235,4 +236,238 @@ run(function()
     if not ok then
         warn("CustomClanTag error:", err)
     end
+end)
+
+run(function()
+	local FalseBan
+	local PlayerDropdown
+	local InvisibleCharacters = {}
+	local CharacterConnections = {}
+	
+	local function makeCharacterInvisible(character, player)
+		if InvisibleCharacters[character] then return end
+		
+		local parts = {}
+		local accessories = {}
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		
+		for _, part in character:GetDescendants() do
+			if part:IsA("BasePart") then
+				parts[part] = {
+					Transparency = part.Transparency,
+					CanCollide = part.CanCollide,
+					CastShadow = part.CastShadow
+				}
+				part.Transparency = 1
+				part.CanCollide = false
+				part.CastShadow = false
+			elseif part:IsA("Decal") or part:IsA("Texture") then
+				parts[part] = {Transparency = part.Transparency}
+				part.Transparency = 1
+			elseif part:IsA("ParticleEmitter") or part:IsA("Trail") then
+				parts[part] = {Enabled = part.Enabled}
+				part.Enabled = false
+			elseif part:IsA("Accessory") then
+				accessories[part] = {
+					Accessory = part,
+					Parent = part.Parent
+				}
+				part.Parent = nil
+			end
+		end
+		
+		if humanoid and humanoid.RootPart then
+			parts[humanoid.RootPart] = parts[humanoid.RootPart] or {}
+			parts[humanoid.RootPart].Transparency = 1
+			humanoid.RootPart.Transparency = 1
+			humanoid.RootPart.CanCollide = false
+		end
+		
+		InvisibleCharacters[character] = {
+			Parts = parts,
+			Accessories = accessories,
+			Player = player,
+			Connections = {}
+		}
+		
+		local connections = InvisibleCharacters[character].Connections
+		
+		table.insert(connections, character.DescendantAdded:Connect(function(descendant)
+			task.wait()
+			if FalseBan.Enabled and InvisibleCharacters[character] then
+				if descendant:IsA("BasePart") then
+					descendant.Transparency = 1
+					descendant.CanCollide = false
+					descendant.CastShadow = false
+				elseif descendant:IsA("Decal") or descendant:IsA("Texture") then
+					descendant.Transparency = 1
+				elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Trail") then
+					descendant.Enabled = false
+				elseif descendant:IsA("Accessory") then
+					local data = {
+						Accessory = descendant,
+						Parent = descendant.Parent
+					}
+					InvisibleCharacters[character].Accessories[descendant] = data
+					descendant.Parent = nil
+				end
+			end
+		end))
+		
+		table.insert(connections, character.AncestryChanged:Connect(function(_, parent)
+			if parent == nil then
+				restoreCharacterVisibility(character)
+			end
+		end))
+		
+		if humanoid then
+			table.insert(connections, humanoid.Died:Connect(function()
+				task.wait(2)
+				restoreCharacterVisibility(character)
+			end))
+		end
+	end
+	
+	local function restoreCharacterVisibility(character)
+		if not InvisibleCharacters[character] then return end
+		
+		local data = InvisibleCharacters[character]
+		
+		for part, properties in data.Parts do
+			if part and part.Parent then
+				if part:IsA("BasePart") then
+					part.Transparency = properties.Transparency or 0
+					part.CanCollide = properties.CanCollide ~= nil and properties.CanCollide or true
+					part.CastShadow = properties.CastShadow ~= nil and properties.CastShadow or true
+				elseif part:IsA("Decal") or part:IsA("Texture") then
+					part.Transparency = properties.Transparency or 0
+				elseif part:IsA("ParticleEmitter") or part:IsA("Trail") then
+					part.Enabled = properties.Enabled ~= nil and properties.Enabled or true
+				end
+			end
+		end
+		
+		for accessory, accessoryData in data.Accessories do
+			if accessory and accessoryData.Parent then
+				accessory.Parent = accessoryData.Parent
+			end
+		end
+		
+		for _, connection in data.Connections do
+			pcall(function()
+				connection:Disconnect()
+			end)
+		end
+		
+		InvisibleCharacters[character] = nil
+	end
+	
+	local function getPlayerList()
+		local playerList = {}
+		
+		for _, player in playersService:GetPlayers() do
+			if player ~= lplr then
+				table.insert(playerList, player.Name)
+			end
+		end
+		
+		table.sort(playerList)
+		return playerList
+	end
+	
+	local function setupPlayerConnections(player)
+		if CharacterConnections[player] then return end
+		
+		local connections = {}
+		
+		table.insert(connections, player.CharacterAdded:Connect(function(character)
+			task.wait(0.5)
+			if FalseBan.Enabled and PlayerDropdown.Value == player.Name then
+				makeCharacterInvisible(character, player)
+			end
+		end))
+		
+		table.insert(connections, player.CharacterRemoving:Connect(function(character)
+			restoreCharacterVisibility(character)
+		end))
+		
+		CharacterConnections[player] = connections
+	end
+	
+	local function processSelectedPlayer()
+		if PlayerDropdown.Value and PlayerDropdown.Value ~= "" then
+			local player = playersService:FindFirstChild(PlayerDropdown.Value)
+			if player and player.Character then
+				makeCharacterInvisible(player.Character, player)
+			end
+		end
+	end
+	
+	FalseBan = vape.Categories.Render:CreateModule({
+		Name = 'FalseBan',
+		Function = function(callback)
+			if callback then
+				for _, player in playersService:GetPlayers() do
+					if player ~= lplr then
+						setupPlayerConnections(player)
+					end
+				end
+				
+				FalseBan:Clean(playersService.PlayerAdded:Connect(function(player)
+					if player == lplr then return end
+					
+					setupPlayerConnections(player)
+					
+					if player.Character and FalseBan.Enabled and PlayerDropdown.Value == player.Name then
+						task.wait(0.5)
+						makeCharacterInvisible(player.Character, player)
+					end
+				end))
+				
+				FalseBan:Clean(playersService.PlayerRemoving:Connect(function(player)
+					if CharacterConnections[player] then
+						for _, connection in CharacterConnections[player] do
+							pcall(function()
+								connection:Disconnect()
+							end)
+						end
+						CharacterConnections[player] = nil
+					end
+					
+					if player.Character then
+						restoreCharacterVisibility(player.Character)
+					end
+				end))
+				
+				processSelectedPlayer()
+				
+			else
+				for character, _ in InvisibleCharacters do
+					restoreCharacterVisibility(character)
+				end
+				table.clear(InvisibleCharacters)
+				
+				for player, connections in CharacterConnections do
+					for _, connection in connections do
+						pcall(function()
+							connection:Disconnect()
+						end)
+					end
+				end
+				table.clear(CharacterConnections)
+			end
+		end,
+		Tooltip = 'Select a player to make invisible client-side only.'
+	})
+	
+	PlayerDropdown = FalseBan:CreateDropdown({
+		Name = 'Select Player',
+		List = getPlayerList(),
+		Function = function(val)
+			if FalseBan.Enabled then
+				FalseBan:Toggle()
+				FalseBan:Toggle()
+			end
+		end
+	})
 end)
