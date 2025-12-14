@@ -1,3 +1,12 @@
+local options = ... or {}
+local closetMode = options.Closet or false
+
+if closetMode then
+    getgenv().print = function() end
+    getgenv().warn = function() end
+    getgenv().error = function() end
+end
+
 local isfile = isfile or function(file)
 	local suc, res = pcall(function()
 		return readfile(file)
@@ -56,4 +65,4 @@ if not shared.VapeDeveloper then
 	writefile('newvape/profiles/commit.txt', commit)
 end
 
-return loadstring(downloadFile('newvape/main.lua'), 'main')()
+return loadstring(downloadFile('newvape/main.lua'), 'main')(options)
