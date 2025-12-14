@@ -145,7 +145,6 @@ local function addBlur(parent, notif)
 	blur.Name = 'Blur'
 	blur.Size = UDim2.new(1, 89, 1, 52)
 	blur.Position = UDim2.fromOffset(-48, -31)
-	blur.ImageColor3 = parent.BackgroundColor3
 	blur.BackgroundTransparency = 1
 	blur.Image = getcustomasset('newvape/assets/new/'..(notif and 'blurnotif' or 'blur')..'.png')
 	blur.ScaleType = Enum.ScaleType.Slice
@@ -2457,14 +2456,10 @@ task.spawn(function()
 end)
 
 function mainapi:BlurCheck()
-    if not inputService.KeyboardEnabled then
-        return  
-    end
-    if self.ThreadFix then
-        setthreadidentity(8)
-        local shouldBlur = (clickgui.Visible or guiService:GetErrorType() ~= Enum.ConnectionError.OK) and self.Blur.Enabled
-        runService:SetRobloxGuiFocused(shouldBlur)
-    end
+	if self.ThreadFix then
+		setthreadidentity(8)
+		runService:SetRobloxGuiFocused((clickgui.Visible or guiService:GetErrorType() ~= Enum.ConnectionError.OK) and self.Blur.Enabled)
+	end
 end
 
 addMaid(mainapi)
@@ -2488,11 +2483,10 @@ function mainapi:CreateGUI()
 	makeDraggable(window)
 	local logo = Instance.new('ImageLabel')
 	logo.Name = 'VapeLogo'
-	logo.Size = UDim2.fromOffset(120, 25)
+	logo.Size = UDim2.fromOffset(62, 18)
 	logo.Position = UDim2.fromOffset(11, 10)
 	logo.BackgroundTransparency = 1
 	logo.Image = getcustomasset('newvape/assets/new/guivape.png')
-	logo.ScaleType = Enum.ScaleType.Fit
 	logo.ImageColor3 = select(3, uipallet.Main:ToHSV()) > 0.5 and uipallet.Text or Color3.new(1, 1, 1)
 	logo.Parent = window
 	local logov4 = Instance.new('ImageLabel')
@@ -4074,7 +4068,7 @@ function mainapi:CreateOverlay(categorysettings)
 		Type = 'Overlay',
 		Expanded = false,
 		Button = self.Overlays:CreateToggle({
-		Name = categorysettings.Name,
+			Name = categorysettings.Name,
 			Function = function(callback)
 				window.Visible = callback and (clickgui.Visible or categoryapi.Pinned)
 				if not callback then
@@ -5271,18 +5265,16 @@ function mainapi:CreateLegit()
 	return legitapi
 end
 
-function mainapi:CreateNotification(title, text, duration, type, custom, customsize)
+function mainapi:CreateNotification(title, text, duration, type)
 	if not self.Notifications.Enabled then return end
-	if getgenv().closet then return end
-	task.delay(0, function()		
-		local rescaled = 1
+	task.delay(0, function()
 		if self.ThreadFix then
 			setthreadidentity(8)
 		end
 		local i = #notifications:GetChildren() + 1
 		local notification = Instance.new('ImageLabel')
 		notification.Name = 'Notification'
-		notification.Size = UDim2.fromOffset(math.max(getfontsize(removeTags(text), 14 * rescaled, uipallet.Font).X + 80, 266) * rescaled, 75 * rescaled)
+		notification.Size = UDim2.fromOffset(math.max(getfontsize(removeTags(text), 14, uipallet.Font).X + 80, 266), 75)
 		notification.Position = UDim2.new(1, 0, 1, -(29 + (78 * i)))
 		notification.ZIndex = 5
 		notification.BackgroundTransparency = 1
@@ -5293,11 +5285,10 @@ function mainapi:CreateNotification(title, text, duration, type, custom, customs
 		addBlur(notification, true)
 		local iconshadow = Instance.new('ImageLabel')
 		iconshadow.Name = 'Icon'
-		iconshadow.Size = custom and customsize or UDim2.fromOffset(60 * rescaled, 60 * rescaled)
+		iconshadow.Size = UDim2.fromOffset(60, 60)
 		iconshadow.Position = UDim2.fromOffset(-5, -8)
 		iconshadow.ZIndex = 5
 		iconshadow.BackgroundTransparency = 1
-		iconshadow.Image = custom and type or getcustomasset('newvape/assets/new/'..(type or 'info')..'.png')
 		iconshadow.ImageColor3 = Color3.new()
 		iconshadow.ImageTransparency = 0.5
 		iconshadow.Parent = notification
@@ -5308,15 +5299,15 @@ function mainapi:CreateNotification(title, text, duration, type, custom, customs
 		icon.Parent = iconshadow
 		local titlelabel = Instance.new('TextLabel')
 		titlelabel.Name = 'Title'
-		titlelabel.Size = UDim2.new(1 * rescaled, -56 * rescaled, 0, 20 * rescaled)
+		titlelabel.Size = UDim2.new(1, -56, 0, 20)
 		titlelabel.Position = UDim2.fromOffset(46, 16)
 		titlelabel.ZIndex = 5
 		titlelabel.BackgroundTransparency = 1
-		titlelabel.Text = "<stroke color='#FFFFFF' joins='round' thickness='0.3' transparency='0.5'>"..(title)..'</stroke>'
+		titlelabel.Text = "<stroke color='#FFFFFF' joins='round' thickness='0.3' transparency='0.5'>"..title..'</stroke>'
 		titlelabel.TextXAlignment = Enum.TextXAlignment.Left
 		titlelabel.TextYAlignment = Enum.TextYAlignment.Top
 		titlelabel.TextColor3 = Color3.fromRGB(209, 209, 209)
-		titlelabel.TextSize = 14 * rescaled
+		titlelabel.TextSize = 14
 		titlelabel.RichText = true
 		titlelabel.FontFace = uipallet.FontSemiBold
 		titlelabel.Parent = notification
@@ -5338,7 +5329,7 @@ function mainapi:CreateNotification(title, text, duration, type, custom, customs
 		textlabel.Parent = textshadow
 		local progress = Instance.new('Frame')
 		progress.Name = 'Progress'
-		progress.Size = UDim2.new(1 * rescaled, -13 * rescaled, 0, 2 * rescaled)
+		progress.Size = UDim2.new(1, -13, 0, 2)
 		progress.Position = UDim2.new(0, 3, 1, -4)
 		progress.ZIndex = 5
 		progress.BackgroundColor3 =
@@ -5660,7 +5651,7 @@ gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 gui.IgnoreGuiInset = true
 gui.OnTopOfCoreBlur = true
 if mainapi.ThreadFix then
-	gui.Parent = cloneref(game:GetService('CoreGui'))
+	gui.Parent = cloneref(game:GetService('CoreGui'))--(gethui and gethui()) or cloneref(game:GetService('CoreGui'))
 else
 	gui.Parent = cloneref(game:GetService('Players')).LocalPlayer.PlayerGui
 	gui.ResetOnSpawn = false
@@ -5700,7 +5691,7 @@ cursor.Image = 'rbxasset://textures/Cursors/KeyboardMouse/ArrowFarCursor.png'
 cursor.Parent = gui
 notifications = Instance.new('Folder')
 notifications.Name = 'Notifications'
-notifications.Parent = scaledgui  
+notifications.Parent = scaledgui
 tooltip = Instance.new('TextLabel')
 tooltip.Name = 'Tooltip'
 tooltip.Position = UDim2.fromScale(-1, -1)
@@ -6948,13 +6939,13 @@ function mainapi:UpdateGUI(hue, sat, val, default)
 end
 
 mainapi:Clean(notifications.ChildRemoved:Connect(function()
-    for i, v in notifications:GetChildren() do
-        if tween.Tween then
-            tween:Tween(v, TweenInfo.new(0.4, Enum.EasingStyle.Exponential), {
-                Position = UDim2.new(1, 0, 1, -(29 + (78 * i)))
-            })
-        end
-    end
+	for i, v in notifications:GetChildren() do
+		if tween.Tween then
+			tween:Tween(v, TweenInfo.new(0.4, Enum.EasingStyle.Exponential), {
+				Position = UDim2.new(1, 0, 1, -(29 + (78 * i)))
+			})
+		end
+	end
 end))
 
 mainapi:Clean(inputService.InputBegan:Connect(function(inputObj)
