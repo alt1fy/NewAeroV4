@@ -1589,7 +1589,7 @@ run(function()
 					currentCPS = CPS 
 				end
 	
-				task.wait(1 / currentCPS.GetRandomValue())
+				task.wait(1 / (currentCPS and currentCPS.GetRandomValue() or 7))
 			until not AutoClicker.Enabled
 		end)
 	end
@@ -9110,200 +9110,6 @@ run(function()
 end)
 	
 run(function()
-	local StaffDetector
-	local Mode
-	local Clans
-	local Party
-	local Profile
-	local Users
-	local blacklistedclans = {'gg', 'gg2', 'DV', 'DV2'}
-	local blacklisteduserids = {1502104539, 3826146717, 4531785383, 1049767300, 4926350670, 653085195, 184655415, 2752307430, 5087196317, 5744061325, 1536265275}
-	local joined = {}
-	
-	local function getRole(plr, id)
-		local suc, res = pcall(function()
-			return plr:GetRankInGroup(id)
-		end)
-		if not suc then
-			notif('StaffDetector', res, 30, 'alert')
-		end
-		return suc and res or 0
-	end
-	
-	local function staffFunction(plr, checktype)
-		if not vape.Loaded then
-			repeat task.wait() until vape.Loaded
-		end
-	
-		notif('StaffDetector', 'Staff Detected ('..checktype..'): '..plr.Name..' ('..plr.UserId..')', 60, 'alert')
-		whitelist.customtags[plr.Name] = {{text = 'GAME STAFF', color = Color3.new(1, 0, 0)}}
-	
-		if Party.Enabled and not checktype:find('clan') then
-			bedwars.PartyController:leaveParty()
-		end
-	
-		if Mode.Value == 'Uninject' then
-			task.spawn(function()
-				vape:Uninject()
-			end)
-			game:GetService('StarterGui'):SetCore('SendNotification', {
-				Title = 'StaffDetector',
-				Text = 'Staff Detected ('..checktype..')\n'..plr.Name..' ('..plr.UserId..')',
-				Duration = 60,
-			})
-		elseif Mode.Value == 'Requeue' then
-			bedwars.QueueController:joinQueue(store.queueType)
-		elseif Mode.Value == 'Profile' then
-			vape.Save = function() end
-			if vape.Profile ~= Profile.Value then
-				vape:Load(true, Profile.Value)
-			end
-		elseif Mode.Value == 'AutoConfig' then
-			local safe = {'AutoClicker', 'Reach', 'Sprint', 'HitFix', 'StaffDetector'}
-			vape.Save = function() end
-			for i, v in vape.Modules do
-				if not (table.find(safe, i) or v.Category == 'Render') then
-					if v.Enabled then
-						v:Toggle()
-					end
-					v:SetBind('')
-				end
-			end
-		end
-	end
-	
-	local function checkFriends(list)
-		for _, v in list do
-			if joined[v] then
-				return joined[v]
-			end
-		end
-		return nil
-	end
-	
-	local function checkJoin(plr, connection)
-		if not plr:GetAttribute('Team') and plr:GetAttribute('Spectator') and not bedwars.Store:getState().Game.customMatch then
-			connection:Disconnect()
-			
-			task.spawn(function()
-				local tab = {}
-				local suc, pages = pcall(function()
-					return playersService:GetFriendsAsync(plr.UserId)
-				end)
-				
-				if suc then
-					for _ = 1, 2 do
-						pcall(function()
-							for _, v in pages:GetCurrentPage() do
-								table.insert(tab, v.Id)
-							end
-						end)
-						if pages.IsFinished then break end
-						pcall(function()
-							pages:AdvanceToNextPageAsync()
-						end)
-					end
-				end
-
-				local friend = checkFriends(tab)
-				if not friend then
-					staffFunction(plr, 'impossible_join')
-				else
-					notif('StaffDetector', string.format('Spectator %s joined from %s', plr.Name, friend), 20, 'warning')
-				end
-			end)
-			
-			return true
-		end
-	end
-	
-	local function playerAdded(plr)
-		joined[plr.UserId] = plr.Name
-		if plr == lplr then return end
-
-		if table.find(blacklisteduserids, plr.UserId) or table.find(Users.ListEnabled, tostring(plr.UserId)) then
-			staffFunction(plr, 'blacklisted_user')
-			return
-		end
-		
-		task.spawn(function()
-			if getRole(plr, 5774246) >= 100 then
-				staffFunction(plr, 'staff_role')
-				return
-			end
-		end)
-		
-		local connection
-		connection = plr:GetAttributeChangedSignal('Spectator'):Connect(function()
-			checkJoin(plr, connection)
-		end)
-		StaffDetector:Clean(connection)
-		checkJoin(plr, connection)
-
-		task.spawn(function()
-			if not plr:GetAttribute('ClanTag') then
-				plr:GetAttributeChangedSignal('ClanTag'):Wait()
-			end
-
-			if table.find(blacklistedclans, plr:GetAttribute('ClanTag')) and vape.Loaded and Clans.Enabled then
-				if connection then
-					connection:Disconnect()
-				end
-				staffFunction(plr, 'blacklisted_clan_'..plr:GetAttribute('ClanTag'):lower())
-			end
-		end)
-	end
-	
-	StaffDetector = vape.Categories.Utility:CreateModule({
-		Name = 'Staff Detector',
-		Function = function(callback)
-			if callback then
-				StaffDetector:Clean(playersService.PlayerAdded:Connect(playerAdded))
-				for _, v in playersService:GetPlayers() do
-					task.spawn(playerAdded, v)
-				end
-			else
-				table.clear(joined)
-			end
-		end,
-		Tooltip = 'Detects people with a staff rank ingame'
-	})
-	Mode = StaffDetector:CreateDropdown({
-		Name = 'Mode',
-		List = {'Uninject', 'Profile', 'Requeue', 'AutoConfig', 'Notify'},
-		Function = function(val)
-			if Profile.Object then
-				Profile.Object.Visible = val == 'Profile'
-			end
-		end
-	})
-	Clans = StaffDetector:CreateToggle({
-		Name = 'Blacklist clans',
-		Default = true
-	})
-	Party = StaffDetector:CreateToggle({
-		Name = 'Leave party'
-	})
-	Profile = StaffDetector:CreateTextBox({
-		Name = 'Profile',
-		Default = 'default',
-		Darker = true,
-		Visible = false
-	})
-	Users = StaffDetector:CreateTextList({
-		Name = 'Users',
-		Placeholder = 'player (userid)'
-	})
-	
-	task.spawn(function()
-		repeat task.wait(1) until vape.Loaded or vape.Loaded == nil
-		if vape.Loaded and not StaffDetector.Enabled then
-			StaffDetector:Toggle()
-		end
-	end)
-end)
-	
-run(function()
 	TrapDisabler = vape.Categories.Utility:CreateModule({
 		Name = 'TrapDisabler',
 		Tooltip = 'Disables Snap Traps'
@@ -12077,7 +11883,6 @@ run(function()
 	local InstantBreak
 	local LimitItem
 	local MouseDown
-	local BreakClosest
 	local customlist, parts = {}, {}
 	
 	local function customHealthbar(self, blockRef, health, maxHealth, changeHealth, block)
@@ -12182,46 +11987,6 @@ run(function()
 	
 	local hit = 0
 	local currentBedTarget = nil
-
-	local sides = {}
-	for _, v in Enum.NormalId:GetEnumItems() do
-		if v.Name == "Bottom" then continue end
-		table.insert(sides, Vector3.FromNormalId(v) * 3)
-	end
-
-	local function findClosestBreakableBlock(start, playerPos, isBed)
-		local closestBlock = nil
-		local closestDistance = math.huge
-		local closestPos = nil
-		
-		if isBed then
-			local bedBlock = getPlacedBlock(start)
-			if bedBlock and bedBlock.Name == 'bed' then
-				local distance = (playerPos - start).Magnitude
-				closestDistance = distance
-				closestBlock = bedBlock
-				closestPos = start
-			end
-		end
-
-		for _, side in sides do
-			for i = 1, 15 do
-				local blockPos = start + (side * i)
-				local block = getPlacedBlock(blockPos)
-				if not block or block:GetAttribute("NoBreak") then break end
-				if bedwars.BlockController:isBlockBreakable({blockPosition = blockPos / 3}, lplr) then
-					local distance = (playerPos - blockPos).Magnitude
-					if distance < closestDistance then
-						closestDistance = distance
-						closestBlock = block
-						closestPos = blockPos
-					end
-				end
-			end
-		end
-
-		return closestBlock, closestPos
-	end
 	
 	local function canBreakBed(bedBlock)
 		if not bedBlock then return false end
@@ -12232,119 +11997,42 @@ run(function()
 		return true
 	end
 	
-	local function attemptBreak(tab, localPosition, isBed)
-		if not tab then 
-			return 
-		end
-		
+	local function attemptBreak(tab, localPosition)
+		if not tab then return end
 		if MouseDown.Enabled and not inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
 			if isBed then
 				currentBedTarget = nil
 			end
 			return false
 		end
-		
 		for _, v in tab do
 			if (v.Position - localPosition).Magnitude < Range.Value and bedwars.BlockController:isBlockBreakable({blockPosition = v.Position / 3}, lplr) then
-				if not canBreakBed(v) then continue end
-				
+				if not SelfBreak.Enabled and v:GetAttribute('PlacedByUserId') == lplr.UserId then continue end
+				if (v:GetAttribute('BedShieldEndTime') or 0) > workspace:GetServerTimeNow() then continue end
 				if LimitItem.Enabled and not (store.hand.tool and bedwars.ItemMeta[store.hand.tool.Name].breakBlock) then continue end
-
-				if isBed then
-					if currentBedTarget and currentBedTarget ~= v.Position then
-						continue
+	
+				hit += 1
+				local target, path, endpos = bedwars.breakBlock(v, Effect.Enabled, Animation.Enabled, CustomHealth.Enabled and customHealthbar or nil, InstantBreak.Enabled)
+				if path then
+					local currentnode = target
+					for _, part in parts do
+						part.Position = currentnode or Vector3.zero
+						if currentnode then
+							part.BoxHandleAdornment.Color3 = currentnode == endpos and Color3.new(1, 0.2, 0.2) or currentnode == target and Color3.new(0.2, 0.2, 1) or Color3.new(0.2, 1, 0.2)
+						end
+						currentnode = path[currentnode]
 					end
-					currentBedTarget = v.Position
 				end
-
-				local isTargetingBed = v.Name == 'bed'
-				
-				if BreakClosest.Enabled and isTargetingBed then
-					local closestBlock, closestPos = findClosestBreakableBlock(v.Position, localPosition, true)
-					
-					if closestBlock and closestPos then
-						if closestBlock == v then
-							hit += 1
-							local target, path, endpos = bedwars.breakBlock(v, Effect.Enabled, Animation.Enabled, CustomHealth.Enabled and customHealthbar or nil, InstantBreak.Enabled)
-							
-							if path then
-								local currentnode = target
-								for _, part in parts do
-									part.Position = currentnode or Vector3.zero
-									if currentnode then
-										part.BoxHandleAdornment.Color3 = currentnode == endpos and Color3.new(1, 0.2, 0.2) or currentnode == target and Color3.new(0.2, 0.2, 1) or Color3.new(0.2, 1, 0.2)
-									end
-									currentnode = path[currentnode]
-								end
-							end
-
-							task.wait(InstantBreak.Enabled and (store.damageBlockFail > tick() and 4.5 or 0) or BreakSpeed.Value)
-							if not getPlacedBlock(v.Position) then
-								currentBedTarget = nil
-							end
-							return true
-						else
-							local targetBlock = {Position = closestPos}
-							hit += 1
-							local target, path, endpos = bedwars.breakBlock(targetBlock, Effect.Enabled, Animation.Enabled, CustomHealth.Enabled and customHealthbar or nil, InstantBreak.Enabled)
-							
-							if path then
-								local currentnode = target
-								for _, part in parts do
-									part.Position = currentnode or Vector3.zero
-									if currentnode then
-										part.BoxHandleAdornment.Color3 = currentnode == endpos and Color3.new(1, 0.2, 0.2) or currentnode == target and Color3.new(0.2, 0.2, 1) or Color3.new(0.2, 1, 0.2)
-									end
-									currentnode = path[currentnode]
-								end
-							end
-
-							task.wait(InstantBreak.Enabled and (store.damageBlockFail > tick() and 4.5 or 0) or BreakSpeed.Value)
-							return true
-						end
-					end
-				else
-					hit += 1
-					local target, path, endpos = bedwars.breakBlock(v, Effect.Enabled, Animation.Enabled, CustomHealth.Enabled and customHealthbar or nil)
-					
-					if not target then
-						for i, cachedData in cache do
-							if cachedData[1] and (cachedData[1] - v.Position).Magnitude <= 6 then
-								table.clear(cachedData[3])
-								table.clear(cachedData)
-								cache[i] = nil
-							end
-						end
-						return false
-					end
-					
-					if path then
-						local currentnode = target
-						for _, part in parts do
-							part.Position = currentnode or Vector3.zero
-							if currentnode then
-								part.BoxHandleAdornment.Color3 = currentnode == endpos and Color3.new(1, 0.2, 0.2) or currentnode == target and Color3.new(0.2, 0.2, 1) or Color3.new(0.2, 1, 0.2)
-							end
-							currentnode = path[currentnode]
-						end
-					end
-
-					task.wait(InstantBreak.Enabled and (store.damageBlockFail > tick() and 4.5 or 0) or BreakSpeed.Value)
-
-					if isBed then
-						local bedBlock = getPlacedBlock(v.Position)
-						if not bedBlock or bedBlock.Name ~= 'bed' then
-							currentBedTarget = nil
-						end
-					end
-
-					return true
-				end
+	
+				task.wait(InstantBreak.Enabled and (store.damageBlockFail > tick() and 4.5 or 0) or BreakSpeed.Value)
+	
+				return true
 			end
 		end
 	
 		return false
 	end
+
 	
 	Breaker = vape.Categories.Minigames:CreateModule({
 		Name = 'Breaker',
@@ -12478,11 +12166,6 @@ run(function()
 	MouseDown = Breaker:CreateToggle({
 		Name = 'Require Mouse Down',
 		Tooltip = 'Only breaks blocks when holding left click'
-	})
-	BreakClosest = Breaker:CreateToggle({
-		Name = 'Break Closest Block',
-		Tooltip = 'When targeting beds, breaks the closest block to you (bed or blocks around it)',
-		Default = false
 	})
 end)
 	
