@@ -601,13 +601,13 @@ local Settings = {
     AutoClickerPlaceBlocks = true,
     AutoToolEnabled = true,
     DebugMode = true, -- for aero to debug shi
-    GUIEnabled = false,
+    GUIEnabled = true,
     FastBreakEnabled = true,
     FastBreakSpeed = 0.22,
     HitBoxesDisableKeybind = "X",
     HitBoxesEnableKeybind = "Z",
     HitBoxesEnabled = true,
-    HitBoxesExpandAmount = 38,
+    HitBoxesExpandAmount = 50,
     HitBoxesMode = "Player", -- "Sword" or "Player"
     HitFixEnabled = true,
     InstantPPEnabled = false,
@@ -632,9 +632,9 @@ local Settings = {
     UninjectKeybind = "RightAlt",
     VelocityChance = 100,
     VelocityEnabled = true,
-    VelocityHorizontal = 78,
+    VelocityHorizontal = 73,
     VelocityTargetCheck = false,
-    VelocityVertical = 78,
+    VelocityVertical = 73,
 }
 
 pcall(function()
