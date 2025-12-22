@@ -3,6 +3,7 @@ if shared.vape then shared.vape:Uninject() end
 
 local options = ... or {}
 local closetMode = options.Closet or false
+local teleportMode = options.Teleport or false
 
 if closetMode then
     getgenv().print = function() end
@@ -38,7 +39,10 @@ local loadstring = function(...)
     end
     return res
 end
+
 local queue_on_teleport = queue_on_teleport or function() end
+local teleportMode = teleportMode
+
 local isfile = isfile or function(file)
 	local suc, res = pcall(function()
 		return readfile(file)
@@ -76,28 +80,36 @@ local function finishLoading()
         until not vape.Loaded
     end)
 
-    local teleportedServers
-    vape:Clean(playersService.LocalPlayer.OnTeleport:Connect(function()
-		if (not teleportedServers) and (not shared.VapeIndependent) then
-			teleportedServers = true
-			local teleportScript = [[
-				shared.vapereload = true
-				if shared.VapeDeveloper then
-					loadstring(readfile('newvape/loader.lua'), 'loader')()
-				else
-					loadstring(game:HttpGet('https://raw.githubusercontent.com/wrealaero/NewAeroV4/'..readfile('newvape/profiles/commit.txt')..'/loader.lua', true), 'loader')()
-				end
-			]]
-			if shared.VapeDeveloper then
-				teleportScript = 'shared.VapeDeveloper = true\n'..teleportScript
-			end
-			if shared.VapeCustomProfile then
-				teleportScript = 'shared.VapeCustomProfile = "'..shared.VapeCustomProfile..'"\n'..teleportScript
-			end
-			vape:Save()
-			queue_on_teleport(teleportScript)
-		end
-	end))
+    if teleportMode then
+        local teleportedServers
+        vape:Clean(playersService.LocalPlayer.OnTeleport:Connect(function()
+            if (not teleportedServers) and (not shared.VapeIndependent) then
+                teleportedServers = true
+                local teleportScript = [[
+                    shared.vapereload = true
+                    if shared.VapeDeveloper then
+                        loadstring(readfile('newvape/loader.lua'), 'loader')()
+                    else
+                        loadstring(game:HttpGet('https://raw.githubusercontent.com/wrealaero/NewAeroV4/'..readfile('newvape/profiles/commit.txt')..'/loader.lua', true), 'loader')()
+                    end
+                ]]
+                if shared.VapeDeveloper then
+                    teleportScript = 'shared.VapeDeveloper = true\n'..teleportScript
+                end
+                if shared.VapeCustomProfile then
+                    teleportScript = 'shared.VapeCustomProfile = "'..shared.VapeCustomProfile..'"\n'..teleportScript
+                end
+                if teleportMode then
+                    teleportScript = 'shared.TeleportMode = true\n'..teleportScript
+                end
+                if closetMode then
+                    teleportScript = 'shared.ClosetMode = true\n'..teleportScript
+                end
+                vape:Save()
+                queue_on_teleport(teleportScript)
+            end
+        end))
+    end
 
     if not shared.vapereload and not closetMode then 
         if not vape.Categories then return end
@@ -115,6 +127,9 @@ local gui = readfile('newvape/profiles/gui.txt')
 if not isfolder('newvape/assets/'..gui) then
 	makefolder('newvape/assets/'..gui)
 end
+
+shared.TeleportMode = teleportMode
+
 vape = loadstring(downloadFile('newvape/guis/'..gui..'.lua'), 'gui')()
 shared.vape = vape
 
