@@ -8586,7 +8586,7 @@ run(function()
 					end
 				end
 	
-				task.wait(0) -
+				task.wait(0) 
 			until not AutoKit.Enabled
 		end
 	}
