@@ -6887,6 +6887,221 @@ run(function()
         Tooltip = 'Automatically charges your bow to full power with trajectory line preview'
     })
 end)
+
+run(function()
+    local moduleConnectionList = {}
+    local hiddenModels = {}
+    local hiddenParticles = {}
+    local originalProperties = {}
+    
+    local Aerov4TitanRemover = vape.Categories.Render:CreateModule({
+        Name = 'Titan Remover',
+        Function = function(callback)
+            if callback then
+                for _, conn in ipairs(moduleConnectionList) do
+                    if conn and type(conn) == "userdata" and conn.Connected then
+                        conn:Disconnect()
+                    end
+                end
+                moduleConnectionList = {}
+                
+                hiddenModels = {}
+                hiddenParticles = {}
+                originalProperties = {}
+
+                local function hideTitanAssets()
+                    for _, model in workspace:GetDescendants() do
+                        if model:IsA("Model") then
+                            local modelName = model.Name:lower()
+                            
+                            if modelName:find("titan") or modelName:find("golem") or modelName:find("bhaa") or 
+                               modelName == "titan" or modelName == "spiritgolem" or modelName == "voidgolem" then
+                                
+                                if model.Parent and not hiddenModels[model] then
+                                    hiddenModels[model] = true
+                                    
+                                    for _, part in model:GetDescendants() do
+                                        if part:IsA("BasePart") then
+                                            originalProperties[part] = {
+                                                Transparency = part.Transparency,
+                                                CanCollide = part.CanCollide,
+                                                CastShadow = part.CastShadow,
+                                                CanQuery = part.CanQuery
+                                            }
+                                            
+                                            part.Transparency = 1
+                                            part.CanCollide = false
+                                            part.CastShadow = false
+                                            part.CanQuery = false
+                                            
+                                        elseif part:IsA("Decal") or part:IsA("Texture") then
+                                            originalProperties[part] = {
+                                                Transparency = part.Transparency
+                                            }
+                                            part.Transparency = 1
+                                            
+                                        elseif part:IsA("ParticleEmitter") then
+                                            originalProperties[part] = {
+                                                Enabled = part.Enabled
+                                            }
+                                            part.Enabled = false
+                                            hiddenParticles[part] = true
+                                            
+                                        elseif part:IsA("SurfaceGui") or part:IsA("BillboardGui") then
+                                            originalProperties[part] = {
+                                                Enabled = part.Enabled
+                                            }
+                                            part.Enabled = false
+                                        end
+                                    end
+                                end
+                            end
+                        elseif model:IsA("ParticleEmitter") then
+                            local parentName = model.Parent and model.Parent.Name:lower() or ""
+                            if parentName:find("titan") or parentName:find("golem") or parentName:find("bhaa") or 
+                               parentName:find("effect") and (parentName:find("slam") or parentName:find("shockwave")) then
+                                
+                                if not hiddenParticles[model] then
+                                    originalProperties[model] = {
+                                        Enabled = model.Enabled
+                                    }
+                                    hiddenParticles[model] = true
+                                    model.Enabled = false
+                                end
+                            end
+                        end
+                    end
+                    
+                    local function hideBossBars()
+                        for _, screenGui in game:GetService("CoreGui"):GetDescendants() do
+                            if screenGui:IsA("ScreenGui") and (screenGui.Name:find("BossBar") or screenGui.Name:find("Boss")) then
+                                if not originalProperties[screenGui] then
+                                    originalProperties[screenGui] = {
+                                        Enabled = screenGui.Enabled
+                                    }
+                                end
+                                screenGui.Enabled = false
+                            end
+                        end
+                        
+                        local player = game:GetService("Players").LocalPlayer
+                        if player and player:FindFirstChild("PlayerGui") then
+                            for _, screenGui in player.PlayerGui:GetDescendants() do
+                                if screenGui:IsA("ScreenGui") and (screenGui.Name:find("BossBar") or screenGui.Name:find("Boss")) then
+                                    if not originalProperties[screenGui] then
+                                        originalProperties[screenGui] = {
+                                            Enabled = screenGui.Enabled
+                                        }
+                                    end
+                                    screenGui.Enabled = false
+                                end
+                            end
+                        end
+                    end
+                    
+                    pcall(hideBossBars)
+                end
+
+                hideTitanAssets()
+                
+                local lastCheck = tick()
+                local heartbeatConnection = game:GetService("RunService").Heartbeat:Connect(function()
+                    if tick() - lastCheck > 0.5 then
+                        hideTitanAssets()
+                        lastCheck = tick()
+                    end
+                end)
+                table.insert(moduleConnectionList, heartbeatConnection)
+                
+                local descendantConnection = workspace.DescendantAdded:Connect(function(descendant)
+                    if descendant:IsA("Model") then
+                        local name = descendant.Name:lower()
+                        if name:find("titan") or name:find("golem") or name:find("bhaa") then
+                            task.wait(0.1)
+                            hideTitanAssets()
+                        end
+                    elseif descendant:IsA("ParticleEmitter") then
+                        local parentName = descendant.Parent and descendant.Parent.Name:lower() or ""
+                        if parentName:find("titan") or parentName:find("golem") or parentName:find("bhaa") then
+                            if not originalProperties[descendant] then
+                                originalProperties[descendant] = {
+                                    Enabled = descendant.Enabled
+                                }
+                            end
+                            descendant.Enabled = false
+                        end
+                    elseif descendant:IsA("Sound") then
+                        local soundName = descendant.Name:lower()
+                        if soundName:find("titan") or soundName:find("golem") or soundName:find("bhaa") then
+                            if not originalProperties[descendant] then
+                                originalProperties[descendant] = {
+                                    Volume = descendant.Volume
+                                }
+                            end
+                            descendant.Volume = 0
+                        end
+                    end
+                end)
+                table.insert(moduleConnectionList, descendantConnection)
+                
+                task.spawn(function()
+                    local collectionService = game:GetService("CollectionService")
+                    local tagsToMonitor = {"Bhaa", "spiritGolem", "GolemBoss", "Titan"}
+                    
+                    for _, tag in tagsToMonitor do
+                        local success, result = pcall(function()
+                            return collectionService:GetTagged(tag)
+                        end)
+                        
+                        if success then
+                            for _, obj in result do
+                                if obj:IsA("Model") and not hiddenModels[obj] then
+                                    task.wait(0.1)
+                                    hideTitanAssets()
+                                end
+                            end
+                            
+                            local tagAddedConnection = collectionService:GetInstanceAddedSignal(tag):Connect(function(obj)
+                                if obj:IsA("Model") then
+                                    task.wait(0.1)
+                                    hideTitanAssets()
+                                end
+                            end)
+                            table.insert(moduleConnectionList, tagAddedConnection)
+                        end
+                    end
+                end)
+                
+            else
+                for _, conn in ipairs(moduleConnectionList) do
+                    if conn and type(conn) == "userdata" and conn.Connected then
+                        pcall(function()
+                            conn:Disconnect()
+                        end)
+                    end
+                end
+                moduleConnectionList = {}
+                
+                for object, properties in pairs(originalProperties) do
+                    if object and object.Parent then
+                        pcall(function()
+                            for prop, value in pairs(properties) do
+                                if object[prop] ~= nil then
+                                    object[prop] = value
+                                end
+                            end
+                        end)
+                    end
+                end
+                
+                hiddenModels = {}
+                hiddenParticles = {}
+                originalProperties = {}
+            end
+        end,
+        Tooltip = 'Removes Titan/Bhaa models and effects for FPS boost'
+    })
+end)
 	
 run(function()
 	local Speed
@@ -6943,8 +7158,8 @@ run(function()
 	Value = Speed:CreateSlider({
 		Name = 'Speed',
 		Min = 1,
-		Max = 35,
-		Default = 35,
+		Max = 30,
+		Default = 30,
 		Suffix = function(val)
 			return val == 1 and 'stud' or 'studs'
 		end
@@ -12812,7 +13027,6 @@ end)
 run(function()
 	local char = lplr.Character or lplr.CharacterAdded:wait()
 	local Headless = {Enabled = false}
-	local displayName = char:WaitForChild("Head"):WaitForChild("Nametag"):WaitForChild("DisplayNameContainer"):WaitForChild("DisplayName")
 	local faceTransparencyBackup = nil
 	
 	Headless = vape.Categories.Utility:CreateModule({
@@ -17934,7 +18148,7 @@ run(function()
 	})
 end)
 
-run(function()
+--[[run(function()
 	local AG
 	local RH
 	local ShowPath
@@ -18805,7 +19019,7 @@ run(function()
 		Default = true,
 		Tooltip = "Visualize the path with colored blocks"
 	})
-end)
+end)--]]
 
 run(function()
 	local rayCheck = RaycastParams.new()
