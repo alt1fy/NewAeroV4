@@ -28,7 +28,7 @@ end
 
 if not commit or commit == 'main' then
 	local _, subbed = pcall(function()
-		return game:HttpGet('https://github.com/new-qwertyui/CatV5')
+		return game:HttpGet('https://github.com/alt1fy/NewAeroV4')
 	end)
 	commit = subbed:find('currentOid')
 	commit = commit and subbed:sub(commit + 13, commit + 52) or nil
@@ -316,7 +316,7 @@ local function downloadFile(path, func)
 		local suc, res = pcall(function()
 			local subbed = path:gsub('catrewrite/', '')
 			subbed = subbed:gsub(' ', '%%20')
-			return game:HttpGet('https://raw.githubusercontent.com/new-qwertyui/CatV5/'..commit..'/'..subbed, true)
+			return game:HttpGet('https://raw.githubusercontent.com/alt1fy/NewAeroV4/'..commit..'/'..subbed, true)
 		end)
 		if not suc or res == '404: Not Found' then
 			error(res)
@@ -368,7 +368,7 @@ if (not license.Developer and not shared.VapeDeveloper) then
 		makestage(2, 'Downloading config, This may take up to 20s')
 
 		local preloaded = pcall(function()
-			local req = httpService:JSONDecode(game:HttpGet('https://api.github.com/repos/new-qwertyui/CatV5/contents/profiles'))
+			local req = httpService:JSONDecode(game:HttpGet('https://api.github.com/repos/alt1fy/NewAeroV4/contents/profiles'))
 
 			for _, v in req do
 				if v.path ~= 'profiles/commit.txt' then
@@ -386,7 +386,7 @@ if (not license.Developer and not shared.VapeDeveloper) then
 	if #listfiles('catrewrite/translations') <= 2 then
 		makestage(2, 'Downloading languages, this may take a bit')
 	
-		local req = httpService:JSONDecode(game:HttpGet('https://api.github.com/repos/new-qwertyui/CatV5/contents/translations'))
+		local req = httpService:JSONDecode(game:HttpGet('https://api.github.com/repos/alt1fy/NewAeroV4/contents/translations'))
 
 		for _, v in req do
 			makestage(2, `Downloading {v.name} language`)
